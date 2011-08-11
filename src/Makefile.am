@@ -1,3 +1,4 @@
-bin_PROGRAMS=a.out
-a_out_SOURCES=disruptor.cpp
+bin_PROGRAMS=disruptor
+disruptor_SOURCES=disruptor.cpp
+INCLUDES = -I /home/tingarg/dev/tbb/include
 

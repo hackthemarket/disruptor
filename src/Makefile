@@ -35,7 +35,7 @@ POST_UNINSTALL = :
 build_triplet = x86_64-unknown-linux-gnu
 host_triplet = x86_64-unknown-linux-gnu
 target_triplet = x86_64-unknown-linux-gnu
-bin_PROGRAMS = a.out$(EXEEXT)
+bin_PROGRAMS = disruptor$(EXEEXT)
 subdir = src
 DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
@@ -47,9 +47,9 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
-am_a_out_OBJECTS = disruptor.$(OBJEXT)
-a_out_OBJECTS = $(am_a_out_OBJECTS)
-a_out_LDADD = $(LDADD)
+am_disruptor_OBJECTS = disruptor.$(OBJEXT)
+disruptor_OBJECTS = $(am_disruptor_OBJECTS)
+disruptor_LDADD = $(LDADD)
 DEFAULT_INCLUDES = -I.
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
@@ -59,17 +59,17 @@ CXXCOMPILE = $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) \
 CXXLD = $(CXX)
 CXXLINK = $(CXXLD) $(AM_CXXFLAGS) $(CXXFLAGS) $(AM_LDFLAGS) $(LDFLAGS) \
 	-o $@
-SOURCES = $(a_out_SOURCES)
-DIST_SOURCES = $(a_out_SOURCES)
+SOURCES = $(disruptor_SOURCES)
+DIST_SOURCES = $(disruptor_SOURCES)
 ETAGS = etags
 CTAGS = ctags
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
-ACLOCAL = ${SHELL} /home/tingarg/cworkspace/disruptor/missing --run aclocal-1.11
-AMTAR = ${SHELL} /home/tingarg/cworkspace/disruptor/missing --run tar
-AUTOCONF = ${SHELL} /home/tingarg/cworkspace/disruptor/missing --run autoconf
-AUTOHEADER = ${SHELL} /home/tingarg/cworkspace/disruptor/missing --run autoheader
-AUTOMAKE = ${SHELL} /home/tingarg/cworkspace/disruptor/missing --run automake-1.11
-AWK = gawk
+ACLOCAL = ${SHELL} /home/tingarg/git/disruptor/missing --run aclocal-1.11
+AMTAR = ${SHELL} /home/tingarg/git/disruptor/missing --run tar
+AUTOCONF = ${SHELL} /home/tingarg/git/disruptor/missing --run autoconf
+AUTOHEADER = ${SHELL} /home/tingarg/git/disruptor/missing --run autoheader
+AUTOMAKE = ${SHELL} /home/tingarg/git/disruptor/missing --run automake-1.11
+AWK = mawk
 CPPFLAGS = 
 CXX = g++
 CXXDEPMODE = depmode=gcc3
@@ -90,7 +90,7 @@ LDFLAGS =
 LIBOBJS = 
 LIBS = 
 LTLIBOBJS = 
-MAKEINFO = ${SHELL} /home/tingarg/cworkspace/disruptor/missing --run makeinfo
+MAKEINFO = ${SHELL} /home/tingarg/git/disruptor/missing --run makeinfo
 MKDIR_P = /bin/mkdir -p
 OBJEXT = o
 PACKAGE = disruptor
@@ -105,10 +105,10 @@ SET_MAKE =
 SHELL = /bin/bash
 STRIP = 
 VERSION = 1.0
-abs_builddir = /home/tingarg/cworkspace/disruptor/src
-abs_srcdir = /home/tingarg/cworkspace/disruptor/src
-abs_top_builddir = /home/tingarg/cworkspace/disruptor
-abs_top_srcdir = /home/tingarg/cworkspace/disruptor
+abs_builddir = /home/tingarg/git/disruptor/src
+abs_srcdir = /home/tingarg/git/disruptor/src
+abs_top_builddir = /home/tingarg/git/disruptor
+abs_top_srcdir = /home/tingarg/git/disruptor
 ac_ct_CXX = g++
 am__include = include
 am__leading_dot = .
@@ -133,9 +133,9 @@ host_cpu = x86_64
 host_os = linux-gnu
 host_vendor = unknown
 htmldir = ${docdir}
-includedir = ${prefix}/include
+includedir = /home/tingarg/dev/tbb/include
 infodir = ${datarootdir}/info
-install_sh = ${SHELL} /home/tingarg/cworkspace/disruptor/install-sh
+install_sh = ${SHELL} /home/tingarg/git/disruptor/install-sh
 libdir = ${exec_prefix}/lib
 libexecdir = ${exec_prefix}/libexec
 localedir = ${datarootdir}/locale
@@ -159,7 +159,8 @@ target_vendor = unknown
 top_build_prefix = ../
 top_builddir = ..
 top_srcdir = ..
-a_out_SOURCES = disruptor.cpp
+disruptor_SOURCES = disruptor.cpp
+INCLUDES = -I /home/tingarg/dev/tbb/include
 all: all-am
 
 .SUFFIXES:
@@ -231,9 +232,9 @@ uninstall-binPROGRAMS:
 
 clean-binPROGRAMS:
 	-test -z "$(bin_PROGRAMS)" || rm -f $(bin_PROGRAMS)
-a.out$(EXEEXT): $(a_out_OBJECTS) $(a_out_DEPENDENCIES) 
-	@rm -f a.out$(EXEEXT)
-	$(CXXLINK) $(a_out_OBJECTS) $(a_out_LDADD) $(LIBS)
+disruptor$(EXEEXT): $(disruptor_OBJECTS) $(disruptor_DEPENDENCIES) 
+	@rm -f disruptor$(EXEEXT)
+	$(CXXLINK) $(disruptor_OBJECTS) $(disruptor_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
