@@ -8,6 +8,8 @@
 #ifndef DISRUPTOR_HPP_
 #define DISRUPTOR_HPP_
 
+#include <climits>
+
 #include <tbb/atomic.h>
 #include <boost/thread/locks.hpp>
 #include <boost/thread/mutex.hpp>
@@ -15,6 +17,41 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 
 namespace disruptor {
+
+
+/**
+ *             ---- Hacked straight out of Java library. -----
+ *
+ * Returns the number of zero bits preceding the highest-order
+ * ("leftmost") one-bit in the two's complement binary representation
+ * of the specified <tt>int</tt> value.  Returns 32 if the
+ * specified value has no one-bits in its two's complement representation,
+ * in other words if it is equal to zero.
+ *
+ * <p>Note that this method is closely related to the logarithm base 2.
+ * For all positive <tt>int</tt> values x:
+ * <ul>
+ * <li>floor(log<sub>2</sub>(x)) = <tt>31 - numberOfLeadingZeros(x)</tt>
+ * <li>ceil(log<sub>2</sub>(x)) = <tt>32 - numberOfLeadingZeros(x - 1)</tt>
+ * </ul>
+ *
+ * @return the number of zero bits preceding the highest-order
+ *     ("leftmost") one-bit in the two's complement binary representation
+ *     of the specified <tt>int</tt> value, or 32 if the value
+ *     is equal to zero.
+ * @since 1.5
+ */
+int numberOfLeadingZeros(int i) {
+    // HD, Figure 5-6
+    if (i == 0) return 32;
+    int n = 1;
+    if (i >> 16 == 0) { n += 16; i <<= 16; }
+    if (i >> 24 == 0) { n +=  8; i <<=  8; }
+    if (i >> 28 == 0) { n +=  4; i <<=  4; }
+    if (i >> 30 == 0) { n +=  2; i <<=  2; }
+    n -= i >> 31;
+    return n;
+}
 
 /**
   * Calculate the next power of 2, greater than or equal to x.<p>
@@ -24,28 +61,8 @@ namespace disruptor {
   * @return The next power of 2 from x inclusive
   */
  int ceilingNextPowerOfTwo(const int x) {
-     return 1 << (32 - Integer.numberOfLeadingZeros(x - 1));
+     return 1 << (32 - numberOfLeadingZeros(x - 1));
  }
-
- /**
-  * Get the minimum sequence from an array of {@link Consumer}s.
-  *
-  * @param consumers to compare.
-  * @return the minimum sequence found or Long.MAX_VALUE if the array is empty.
-  */
-long getMinimumSequence(const std::vector<Consumer*> consumers)
- {
-     long minimum = Long.MAX_VALUE;
-
-//     for (Consumer consumer : consumers)
-//     {
-//         long sequence = consumer.getSequence();
-//         minimum = minimum < sequence ? minimum : sequence;
-//     }
-//
-//     return minimum;
- }
-
 
 
 class AbstractEntry {
@@ -103,6 +120,24 @@ public:
     virtual void run() = 0;
 
 }; // class consumer
+
+/**
+ * Get the minimum sequence from an array of {@link Consumer}s.
+ *
+ * @param consumers to compare.
+ * @return the minimum sequence found or Long.MAX_VALUE if the array is empty.
+ */
+long getMinimumSequence(const std::vector<Consumer*> consumers) {
+    long minimum = LONG_MAX;
+
+    for (int i = 0; i < consumers.size(); i++) {
+   	 Consumer* consumer = consumers.at(i);
+        long sequence = consumer->getSequence();
+        minimum = minimum < sequence ? minimum : sequence;
+    }
+
+    return minimum;
+}
 
 /**
  * Coordination barrier for tracking the cursor for producers and sequence of
@@ -292,7 +327,6 @@ class WaitStrategy {
      * @param barrier the consumer is waiting on.
      * @param sequence to be waited on.
      * @param timeout value to abort after.
-     * @param units of the timeout value.
      * @return the sequence that is available which may be greater than the requested sequence.
      * @throws AlertException if the status of the Disruptor has changed.
      * @throws InterruptedException if the thread is interrupted.
@@ -300,7 +334,7 @@ class WaitStrategy {
 	template <typename T>
     long waitFor(std::vector<Consumer*> consumers,
     		RingBuffer<T> ringBuffer, ConsumerBarrier<T> barrier, long sequence,
-    		long timeout, boost::posix_time::time_duration units) {};
+    		boost::posix_time::time_duration timeout) {};
         //throws AlertException, InterruptedException;
 
     /**
@@ -315,263 +349,272 @@ class WaitStrategy {
  *
  * This strategy should be used when performance and low-latency are not as important as CPU resource.
  */
-class BlockingStrategy : public  WaitStrategy {
+class BlockingStrategy : public WaitStrategy {
 private:
 
 	const boost::shared_mutex _mutex;
 
-//	const Lock lock = new ReentrantLock();
- //       const Condition consumerNotifyCondition = lock.newCondition();
+	//	const Lock lock = new ReentrantLock();
+	//       const Condition consumerNotifyCondition = lock.newCondition();
 
 public:
 
 	template <typename T>
-   	long waitFor(std::vector<Consumer*> consumers, RingBuffer<T> ringBuffer,
-        		ConsumerBarrier<T> barrier,  long sequence) {
+	long waitFor(std::vector<Consumer*> consumers, RingBuffer<T> ringBuffer,
+			ConsumerBarrier<T> barrier, long sequence) {
 
-            long availableSequence;
-            if ((availableSequence = ringBuffer.getCursor()) < sequence)
-            {
-            	boost::unique_lock< boost::shared_mutex > lock(lock);
-            	while ((availableSequence = ringBuffer.getCursor()) < sequence)
-            	{
-            		if (barrier.isAlerted())
-            		{
-            			//throw ALERT_EXCEPTION;
-            			std::cerr << "ALERT ... " << std::endl;
-            		}
-                        //consumerNotifyCondition.await();
-                }
-            }
+		long availableSequence;
+		if ((availableSequence = ringBuffer.getCursor()) < sequence)
+		{
+			boost::unique_lock< boost::shared_mutex > lock(lock);
+			while ((availableSequence = ringBuffer.getCursor()) < sequence)
+			{
+				if (barrier.isAlerted())
+				{
+					//throw ALERT_EXCEPTION;
+					std::cerr << "ALERT ... " << std::endl;
+				}
+				//consumerNotifyCondition.await();
+			}
+		}
 
-            if (0 != consumers.size())
-            {
-                while ((availableSequence = getMinimumSequence(consumers)) < sequence)
-                {
-                    if (barrier.isAlerted())
-                    {
-                    	std::cerr << "ALERT ... " << std::endl;
-                     //  throw ALERT_EXCEPTION;
-                    }
-                }
-            }
+		if (0 != consumers.size())
+		{
+			while ((availableSequence = getMinimumSequence(consumers)) < sequence)
+			{
+				if (barrier.isAlerted())
+				{
+					std::cerr << "ALERT ... " << std::endl;
+					//  throw ALERT_EXCEPTION;
+				}
+			}
+		}
 
-            return availableSequence;
-        }
+		return availableSequence;
+	}
 
 	template <typename T>
-   long waitFor(std::vector<Consumer*> consumers,
-        		RingBuffer<T> ringBuffer, ConsumerBarrier<T> barrier, long sequence,
-        		long timeout, boost::posix_time::time_duration units) {
-            long availableSequence;
-            if ((availableSequence = ringBuffer.getCursor()) < sequence)
-            {
-            	boost::unique_lock< boost::shared_mutex > lock(lock);
-                    while ((availableSequence = ringBuffer.getCursor()) < sequence)
-                    {
-                        if (barrier.isAlerted())
-                        {
-                           // throw ALERT_EXCEPTION;
-                        	std::cerr << "ALERT ... " << std::endl;
-                       }
+	long waitFor(std::vector<Consumer*> consumers,
+			RingBuffer<T> ringBuffer, ConsumerBarrier<T> barrier, long sequence,
+			boost::posix_time::time_duration timeout) {
+		long availableSequence;
+		if ((availableSequence = ringBuffer.getCursor()) < sequence)
+		{
+			boost::unique_lock< boost::shared_mutex > lock(lock);
+			while ((availableSequence = ringBuffer.getCursor()) < sequence)
+			{
+				if (barrier.isAlerted())
+				{
+					// throw ALERT_EXCEPTION;
+					std::cerr << "ALERT ... " << std::endl;
+				}
 
-                        if (!consumerNotifyCondition.await(timeout, units))
-                        {
-                            break;
-                        }
-                    }
-            }
+				//                        if (!consumerNotifyCondition.await(timeout, units))
+				//                        {
+				//                            break;
+				//                        }
+			}
+		}
 
-            if (0 != consumers.length)
-            {
-                while ((availableSequence = getMinimumSequence(consumers)) < sequence)
-                {
-                    if (barrier.isAlerted())
-                    {
-                    	std::cerr << "ALERT ... " << std::endl;
-//                  throw ALERT_EXCEPTION;
-                    }
-                }
-            }
+		if (0 != consumers.size())
+		{
+			while ((availableSequence = getMinimumSequence(consumers)) < sequence)
+			{
+				if (barrier.isAlerted())
+				{
+					std::cerr << "ALERT ... " << std::endl;
+					//                  throw ALERT_EXCEPTION;
+				}
+			}
+		}
 
-            return availableSequence;
-        }
+		return availableSequence;
+	}
 
-        void signalAll()
-        {
-        	boost::unique_lock< boost::shared_mutex > lock(lock);
-//                consumerNotifyCondition.signalAll();
-            }
-        }
-    }
+	void signalAll()
+	{
+		//boost::unique_lock< boost::shared_mutex > lock(lock);
+		//                consumerNotifyCondition.signalAll();
+
+	}
+}; // BlockingStrategy
+
+/**
+ * Yielding strategy that uses a Thread.yield() for {@link Consumer}s waiting
+ * on a barrier.
+ *
+ * This strategy is a good compromise between performance and CPU resource.
+ */
+class YieldingStrategy: public WaitStrategy {
+public:
+
+	template<typename T>
+	long waitFor(std::vector<Consumer*> consumers, RingBuffer<T> ringBuffer,
+			ConsumerBarrier<T> barrier, long sequence) {
+		long availableSequence;
+
+		if (0 == consumers.size()) {
+			while ((availableSequence = ringBuffer.getCursor()) < sequence) {
+				if (barrier.isAlerted()) {
+					//throw ALERT_EXCEPTION;
+					std::cerr << "ALERT ... " << std::endl;
+				}
+				//Thread.yield();
+				boost::this_thread::yield();
+			}
+		} else {
+			while ((availableSequence = getMinimumSequence(consumers))
+					< sequence) {
+				if (barrier.isAlerted()) {
+					//throw ALERT_EXCEPTION;
+					std::cerr << "ALERT ... " << std::endl;
+				}
+				boost::this_thread::yield();
+				//				Thread.yield();
+			}
+		}
+
+		return availableSequence;
+	}
+
+	template<typename T>
+	long waitFor(std::vector<Consumer*> consumers, RingBuffer<T> ringBuffer,
+			ConsumerBarrier<T> barrier, long sequence,
+			boost::posix_time::time_duration timeout) {
+
+		const boost::posix_time::ptime currentTime();//System.currentTimeMillis();
+		long availableSequence;
+
+		if (0 == consumers.size()) {
+			while ((availableSequence = ringBuffer.getCursor()) < sequence) {
+				if (barrier.isAlerted()) {
+					//throw ALERT_EXCEPTION;
+					std::cerr << "ALERT ... " << std::endl;
+
+				}
+
+				boost::this_thread::yield();
+				//				Thread.yield();
+				boost::posix_time::ptime now();
+				boost::posix_time::time_period per(currentTime, now);
+				if (timeout < per.length()) {
+					break;
+				}
+			}
+		} else {
+			while ((availableSequence = getMinimumSequence(consumers))
+					< sequence) {
+				if (barrier.isAlerted()) {
+					//					throw ALERT_EXCEPTION;
+					std::cerr << "ALERT ... " << std::endl;
+				}
+				boost::this_thread::yield();
+				//			Thread.yield();
+				boost::posix_time::ptime now();
+				boost::posix_time::time_period per(currentTime, now);
+				if (timeout < per.length()) {
+					break;
+				}
+			}
+		}
+
+		return availableSequence;
+	}
+
+	void signalAll() {	}
+
+}; // YieldingStrategy
 
     /**
-     * Yielding strategy that uses a Thread.yield() for {@link Consumer}s waiting on a barrier.
-     *
-     * This strategy is a good compromise between performance and CPU resource.
-     */
-    const class YieldingStrategy : public WaitStrategy
-    {
-    public:
-    	long waitFor(const Consumer[] consumers, const RingBuffer ringBuffer, const ConsumerBarrier barrier, const long sequence)
-            throws AlertException, InterruptedException
-        {
-            long availableSequence;
+ * Busy Spin strategy that uses a busy spin loop for {@link Consumer}s waiting on a barrier.
+ *
+ * This strategy will use CPU resource to avoid syscalls which can introduce latency jitter.  It is best
+ * used when threads can be bound to specific CPU cores.
+ */
+class BusySpinStrategy: public WaitStrategy {
 
-            if (0 == consumers.length)
-            {
-                while ((availableSequence = ringBuffer.getCursor()) < sequence)
-                {
-                    if (barrier.isAlerted())
-                    {
-                        throw ALERT_EXCEPTION;
-                    }
-                    Thread.yield();
-                }
-            }
-            else
-            {
-                while ((availableSequence = getMinimumSequence(consumers)) < sequence)
-                {
-                    if (barrier.isAlerted())
-                    {
-                        throw ALERT_EXCEPTION;
-                    }
-                    Thread.yield();
-                }
-            }
+public:
 
-            return availableSequence;
-        }
+	template <typename T>
+	long waitFor(std::vector<Consumer*> consumers, RingBuffer<T> ringBuffer,
+			ConsumerBarrier<T> barrier, long sequence) {
+		long availableSequence;
 
-        long waitFor(const Consumer[] consumers, const RingBuffer ringBuffer, const ConsumerBarrier barrier,
-                            const long sequence, const long timeout, const TimeUnit units)
-            throws AlertException, InterruptedException
-        {
-            const long timeoutMs = units.convert(timeout, TimeUnit.MILLISECONDS);
-            const long currentTime = System.currentTimeMillis();
-            long availableSequence;
+		if (0 == consumers.size())
+		{
+			while ((availableSequence = ringBuffer.getCursor()) < sequence)
+			{
+				if (barrier.isAlerted())
+				{
+//					throw ALERT_EXCEPTION;
+					std::cerr << "ALERT ... " << std::endl;
 
-            if (0 == consumers.length)
-            {
-                while ((availableSequence = ringBuffer.getCursor()) < sequence)
-                {
-                    if (barrier.isAlerted())
-                    {
-                        throw ALERT_EXCEPTION;
-                    }
+				}
+			}
+		}
+		else
+		{
+			while ((availableSequence = getMinimumSequence(consumers)) < sequence)
+			{
+				if (barrier.isAlerted())
+				{
+//					throw ALERT_EXCEPTION;
+					std::cerr << "ALERT ... " << std::endl;
+				}
+			}
+		}
 
-                    Thread.yield();
-                    if (timeoutMs < (System.currentTimeMillis() - currentTime))
-                    {
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                while ((availableSequence = getMinimumSequence(consumers)) < sequence)
-                {
-                    if (barrier.isAlerted())
-                    {
-                        throw ALERT_EXCEPTION;
-                    }
+		return availableSequence;
+	}
 
-                    Thread.yield();
-                    if (timeoutMs < (System.currentTimeMillis() - currentTime))
-                    {
-                        break;
-                    }
-                }
-            }
+	template <typename T>
+	long waitFor(std::vector<Consumer*> consumers,
+			RingBuffer<T> ringBuffer, ConsumerBarrier<T> barrier, long sequence,
+			boost::posix_time::time_duration timeout) {
+		const boost::posix_time::ptime currentTime();//System.currentTimeMillis();
+		long availableSequence;
 
-            return availableSequence;
-        }
+		if (0 == consumers.size())
+		{
+			while ((availableSequence = ringBuffer.getCursor()) < sequence)
+			{
+				if (barrier.isAlerted())
+				{
+//					throw ALERT_EXCEPTION;
+					std::cerr << "ALERT ... " << std::endl;
 
-        void signalAll()  { }
-    }
+				}
 
-    /**
-     * Busy Spin strategy that uses a busy spin loop for {@link Consumer}s waiting on a barrier.
-     *
-     * This strategy will use CPU resource to avoid syscalls which can introduce latency jitter.  It is best
-     * used when threads can be bound to specific CPU cores.
-     */
-    const class BusySpinStrategy : public WaitStrategy    {
+				boost::posix_time::ptime now();
+				boost::posix_time::time_period per(currentTime, now);
+				if (timeout < per.length()) {
+					break;
+				}
+			}
+		}
+		else
+		{
+			while ((availableSequence = getMinimumSequence(consumers)) < sequence)
+			{
+				if (barrier.isAlerted())
+				{
+//					throw ALERT_EXCEPTION;
+					std::cerr << "ALERT ... " << std::endl;
+				}
 
-        public long waitFor(const Consumer[] consumers, const RingBuffer ringBuffer, const ConsumerBarrier barrier, const long sequence)
-            throws AlertException, InterruptedException
-        {
-            long availableSequence;
+				boost::posix_time::ptime now();
+				boost::posix_time::time_period per(currentTime, now);
+				if (timeout < per.length()) {
+					break;
+				}
+			}
+		}
 
-            if (0 == consumers.length)
-            {
-                while ((availableSequence = ringBuffer.getCursor()) < sequence)
-                {
-                    if (barrier.isAlerted())
-                    {
-                        throw ALERT_EXCEPTION;
-                    }
-                }
-            }
-            else
-            {
-                while ((availableSequence = getMinimumSequence(consumers)) < sequence)
-                {
-                    if (barrier.isAlerted())
-                    {
-                        throw ALERT_EXCEPTION;
-                    }
-                }
-            }
+		return availableSequence;
+	}
 
-            return availableSequence;
-        }
-
-        long waitFor(const Consumer[] consumers, const RingBuffer ringBuffer, const ConsumerBarrier barrier,
-                            const long sequence, const long timeout, const TimeUnit units)
-            throws AlertException, InterruptedException
-        {
-            const long timeoutMs = units.convert(timeout, TimeUnit.MILLISECONDS);
-            const long currentTime = System.currentTimeMillis();
-            long availableSequence;
-
-            if (0 == consumers.length)
-            {
-                while ((availableSequence = ringBuffer.getCursor()) < sequence)
-                {
-                    if (barrier.isAlerted())
-                    {
-                        throw ALERT_EXCEPTION;
-                    }
-
-                    if (timeoutMs < (System.currentTimeMillis() - currentTime))
-                    {
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                while ((availableSequence = getMinimumSequence(consumers)) < sequence)
-                {
-                    if (barrier.isAlerted())
-                    {
-                        throw ALERT_EXCEPTION;
-                    }
-
-                    if (timeoutMs < (System.currentTimeMillis() - currentTime))
-                    {
-                        break;
-                    }
-                }
-            }
-
-            return availableSequence;
-        }
-
-        void signalAll(){ }
-    }
+	void signalAll() {	}
+}; // BusySpinStrategy
 
 /**
  * Strategy options which are available to those waiting on a {@link RingBuffer}
@@ -612,6 +655,55 @@ struct BusyWait : public WaitStrategyOption {
 
 
 /**
+ * Strategies employed for claiming the sequence of {@link AbstractEntry}s in
+ * the {@link RingBuffer} by producers.
+ *
+ * The {@link AbstractEntry} index is a the sequence value mod the
+ * {@link RingBuffer} capacity.
+ */
+class ClaimStrategy  {
+public:
+
+	/**
+     * Claim the next sequence index in the {@link RingBuffer} and increment.
+     *
+     * @return the {@link AbstractEntry} index to be used for the producer.
+     */
+    virtual long incrementAndGet() = 0;
+
+    /**
+     * Increment by a delta and get the result.
+     *
+     * @param delta to increment by.
+     * @return the result after incrementing.
+     */
+    virtual long incrementAndGet(int delta) = 0;
+
+    /**
+     * Set the current sequence value for claiming {@link AbstractEntry} in
+     * the {@link RingBuffer}
+     *
+     * @param sequence to be set as the current value.
+     */
+    virtual void setSequence(long sequence) = 0;
+
+
+}; // ClaimStrategy
+
+/**
+ * Indicates the threading policy to be applied for claiming {@link
+ * AbstractEntry}s by producers to the {@link RingBuffer}
+ */
+struct ClaimStrategyOption {
+    /**
+     * Used by the {@link RingBuffer} as a polymorphic constructor.
+     *
+     * @return a new instance of the ClaimStrategy
+     */
+    virtual ClaimStrategy* newInstance() = 0;
+}; // Option
+
+/**
  * Called by the {@link RingBuffer} to pre-populate all the {@link AbstractEntry}s to fill the RingBuffer.
  *
  * @param <T> AbstractEntry implementation storing the data for sharing during exchange or parallel coordination of an event.
@@ -621,6 +713,193 @@ class EntryFactory {
 public:
     T create();
 };
+
+
+/**
+ * ConsumerBarrier handed out for gating consumers of the RingBuffer and
+ * dependent {@link Consumer}(s)
+ */
+template<typename T>
+class ConsumerTrackingConsumerBarrier: public ConsumerBarrier<T> {
+private:
+	volatile boolean alerted = false;
+	const std::vector<Consumer*> consumers;
+public:
+
+	ConsumerTrackingConsumerBarrier(const Consumer ... consumers) {
+		this.consumers = consumers;
+	}
+
+	T getEntry(const long sequence) {
+		return (T) entries[(int) sequence & ringModMask];
+	}
+
+	long waitFor(const long sequence)
+	//    throws AlertException, InterruptedException
+	{
+		return	waitStrategy.waitFor(consumers, RingBuffer.this, this, sequence);
+	}
+
+long waitFor(const long sequence, const long timeout, const TimeUnit units)
+//  throws AlertException, InterruptedException
+{
+	return waitStrategy.waitFor(consumers, RingBuffer.this, this, sequence, timeout, units);
+}
+
+long getCursor() {return cursor;}
+
+boolean isAlerted() {return alerted;}
+
+void alert() {
+	alerted = true;
+	waitStrategy.signalAll();
+}
+
+public void clearAlert() {alerted = false;}
+}; // ConsumerTrackingConsumerBarrier
+
+/**
+ * {@link ProducerBarrier} that tracks multiple {@link Consumer}s when trying to claim
+ * an {@link AbstractEntry} in the {@link RingBuffer}.
+ */
+private const class ConsumerTrackingProducerBarrier implements ProducerBarrier<T>
+{
+private const Consumer[] consumers;
+private long lastConsumerMinimum = RingBuffer.INITIAL_CURSOR_VALUE;
+
+public ConsumerTrackingProducerBarrier(const Consumer... consumers)
+	{
+		if (0 == consumers.length)
+		{
+			throw new IllegalArgumentException("There must be at least one Consumer to track for preventing ring wrap");
+		}
+		this.consumers = consumers;
+	}
+
+public T nextEntry()
+	{
+		const long sequence = claimStrategy.incrementAndGet();
+		ensureConsumersAreInRange(sequence);
+
+		AbstractEntry entry = entries[(int)sequence & ringModMask];
+		entry.setSequence(sequence);
+
+		return (T)entry;
+	}
+
+public void commit(const T entry)
+	{
+		commit(entry.getSequence(), 1);
+	}
+
+public SequenceBatch nextEntries(const SequenceBatch sequenceBatch)
+	{
+		const long sequence = claimStrategy.incrementAndGet(sequenceBatch.getSize());
+		sequenceBatch.setEnd(sequence);
+		ensureConsumersAreInRange(sequence);
+
+		for (long i = sequenceBatch.getStart(), end = sequenceBatch.getEnd(); i <= end; i++)
+		{
+			AbstractEntry entry = entries[(int)i & ringModMask];
+			entry.setSequence(i);
+		}
+
+		return sequenceBatch;
+	}
+
+public void commit(const SequenceBatch sequenceBatch)
+	{
+		commit(sequenceBatch.getEnd(), sequenceBatch.getSize());
+	}
+
+public T getEntry(const long sequence)
+	{
+		return (T)entries[(int)sequence & ringModMask];
+	}
+
+public long getCursor()
+	{
+		return cursor;
+	}
+
+private void ensureConsumersAreInRange(const long sequence)
+	{
+		const long wrapPoint = sequence - entries.length;
+		while (wrapPoint > lastConsumerMinimum &&
+				wrapPoint > (lastConsumerMinimum = getMinimumSequence(consumers)))
+		{
+			Thread.yield();
+		}
+	}
+
+private void commit(const long sequence, const long batchSize)
+	{
+		if (ClaimStrategy.Option.MULTI_THREADED == claimStrategyOption)
+		{
+			const long expectedSequence = sequence - batchSize;
+			while (expectedSequence != cursor)
+			{
+				// busy spin
+			}
+		}
+
+		cursor = sequence;
+		waitStrategy.signalAll();
+	}
+}
+
+/**
+ * {@link ForceFillProducerBarrier} that tracks multiple {@link Consumer}s when trying to claim
+ * a {@link AbstractEntry} in the {@link RingBuffer}.
+ */
+private const class ForceFillConsumerTrackingProducerBarrier implements ForceFillProducerBarrier<T>
+{
+private const Consumer[] consumers;
+private long lastConsumerMinimum = RingBuffer.INITIAL_CURSOR_VALUE;
+
+public ForceFillConsumerTrackingProducerBarrier(const Consumer... consumers)
+	{
+		if (0 == consumers.length)
+		{
+			throw new IllegalArgumentException("There must be at least one Consumer to track for preventing ring wrap");
+		}
+		this.consumers = consumers;
+	}
+
+public T claimEntry(const long sequence)
+	{
+		ensureConsumersAreInRange(sequence);
+
+		AbstractEntry entry = entries[(int)sequence & ringModMask];
+		entry.setSequence(sequence);
+
+		return (T)entry;
+	}
+
+public void commit(const T entry)
+	{
+		long sequence = entry.getSequence();
+		claimStrategy.setSequence(sequence);
+		cursor = sequence;
+		waitStrategy.signalAll();
+	}
+
+public long getCursor()
+	{
+		return cursor;
+	}
+
+private void ensureConsumersAreInRange(const long sequence)
+	{
+		const long wrapPoint = sequence - entries.length;
+		while (wrapPoint > lastConsumerMinimum &&
+				wrapPoint > (lastConsumerMinimum = getMinimumSequence(consumers)))
+		{
+			Thread.yield();
+		}
+	}
+}
+
 
 template <typename T>
 class RingBuffer {
@@ -651,8 +930,8 @@ RingBuffer(const EntryFactory<T> entryFactory, const int size,
                   const ClaimStrategyOption* claimStrategyOption,
                   const WaitStrategyOption* waitStrategyOption)
 	: _cursor(INITIAL_CURSOR_VALUE) ,
-	  _ringModMask(ceilingNextPowerOfTwo(size)-1)
-		_claimStrategy(claimStrategyOption->newInstance())
+	  _ringModMask(ceilingNextPowerOfTwo(size)-1),
+		_claimStrategy(claimStrategyOption->newInstance()),
 	  _claimStrategyOption(claimStrategyOption),
 	  _waitStrategy(waitStrategyOption->newInstance())
 
@@ -750,238 +1029,7 @@ void fill(const EntryFactory<T> entryFactory) {
     }
 };
 
-/**
- * ConsumerBarrier handed out for gating consumers of the RingBuffer and
- * dependent {@link Consumer}(s)
- */
-class ConsumerTrackingConsumerBarrier public: ConsumerBarrier<T>
-{
-private:
-    volatile boolean alerted = false;
-    private const Consumer[] consumers;
-public:
-
-    ConsumerTrackingConsumerBarrier(const Consumer... consumers) {
-    	this.consumers = consumers;
-    }
-
-    T getEntry(const long sequence) {
-        return (T)entries[(int)sequence & ringModMask];
-    }
-
-    long waitFor(const long sequence)
-    //    throws AlertException, InterruptedException
-    {
-        return waitStrategy.waitFor(consumers, RingBuffer.this, this, sequence);
-    }
-
-    long waitFor(const long sequence, const long timeout, const TimeUnit units)
-      //  throws AlertException, InterruptedException
-    {
-        return waitStrategy.waitFor(consumers, RingBuffer.this, this, sequence, timeout, units);
-    }
-
-    public long getCursor()
-    {
-        return cursor;
-    }
-
-    public boolean isAlerted()
-    {
-        return alerted;
-    }
-
-    public void alert()
-    {
-        alerted = true;
-        waitStrategy.signalAll();
-    }
-
-    public void clearAlert()
-    {
-        alerted = false;
-    }
-}
-
-/**
- * {@link ProducerBarrier} that tracks multiple {@link Consumer}s when trying to claim
- * an {@link AbstractEntry} in the {@link RingBuffer}.
- */
-private const class ConsumerTrackingProducerBarrier implements ProducerBarrier<T>
-{
-    private const Consumer[] consumers;
-    private long lastConsumerMinimum = RingBuffer.INITIAL_CURSOR_VALUE;
-
-    public ConsumerTrackingProducerBarrier(const Consumer... consumers)
-    {
-        if (0 == consumers.length)
-        {
-            throw new IllegalArgumentException("There must be at least one Consumer to track for preventing ring wrap");
-        }
-        this.consumers = consumers;
-    }
-
-    public T nextEntry()
-    {
-        const long sequence = claimStrategy.incrementAndGet();
-        ensureConsumersAreInRange(sequence);
-
-        AbstractEntry entry = entries[(int)sequence & ringModMask];
-        entry.setSequence(sequence);
-
-        return (T)entry;
-    }
-
-    public void commit(const T entry)
-    {
-        commit(entry.getSequence(), 1);
-    }
-
-    public SequenceBatch nextEntries(const SequenceBatch sequenceBatch)
-    {
-        const long sequence = claimStrategy.incrementAndGet(sequenceBatch.getSize());
-        sequenceBatch.setEnd(sequence);
-        ensureConsumersAreInRange(sequence);
-
-        for (long i = sequenceBatch.getStart(), end = sequenceBatch.getEnd(); i <= end; i++)
-        {
-            AbstractEntry entry = entries[(int)i & ringModMask];
-            entry.setSequence(i);
-        }
-
-        return sequenceBatch;
-    }
-
-    public void commit(const SequenceBatch sequenceBatch)
-    {
-        commit(sequenceBatch.getEnd(), sequenceBatch.getSize());
-    }
-
-    public T getEntry(const long sequence)
-    {
-        return (T)entries[(int)sequence & ringModMask];
-    }
-
-    public long getCursor()
-    {
-        return cursor;
-    }
-
-    private void ensureConsumersAreInRange(const long sequence)
-    {
-        const long wrapPoint = sequence - entries.length;
-        while (wrapPoint > lastConsumerMinimum &&
-               wrapPoint > (lastConsumerMinimum = getMinimumSequence(consumers)))
-        {
-            Thread.yield();
-        }
-    }
-
-    private void commit(const long sequence, const long batchSize)
-    {
-        if (ClaimStrategy.Option.MULTI_THREADED == claimStrategyOption)
-        {
-            const long expectedSequence = sequence - batchSize;
-            while (expectedSequence != cursor)
-            {
-                // busy spin
-            }
-        }
-
-        cursor = sequence;
-        waitStrategy.signalAll();
-    }
-}
-
-/**
- * {@link ForceFillProducerBarrier} that tracks multiple {@link Consumer}s when trying to claim
- * a {@link AbstractEntry} in the {@link RingBuffer}.
- */
-private const class ForceFillConsumerTrackingProducerBarrier implements ForceFillProducerBarrier<T>
-{
-    private const Consumer[] consumers;
-    private long lastConsumerMinimum = RingBuffer.INITIAL_CURSOR_VALUE;
-
-    public ForceFillConsumerTrackingProducerBarrier(const Consumer... consumers)
-    {
-        if (0 == consumers.length)
-        {
-            throw new IllegalArgumentException("There must be at least one Consumer to track for preventing ring wrap");
-        }
-        this.consumers = consumers;
-    }
-
-    public T claimEntry(const long sequence)
-    {
-        ensureConsumersAreInRange(sequence);
-
-        AbstractEntry entry = entries[(int)sequence & ringModMask];
-        entry.setSequence(sequence);
-
-        return (T)entry;
-    }
-
-    public void commit(const T entry)
-    {
-        long sequence = entry.getSequence();
-        claimStrategy.setSequence(sequence);
-        cursor = sequence;
-        waitStrategy.signalAll();
-    }
-
-    public long getCursor()
-    {
-        return cursor;
-    }
-
-    private void ensureConsumersAreInRange(const long sequence)
-    {
-        const long wrapPoint = sequence - entries.length;
-        while (wrapPoint > lastConsumerMinimum &&
-               wrapPoint > (lastConsumerMinimum = getMinimumSequence(consumers)))
-        {
-            Thread.yield();
-        }
-    }
-}
-
 };
-
-/**
- * Strategies employed for claiming the sequence of {@link AbstractEntry}s in
- * the {@link RingBuffer} by producers.
- *
- * The {@link AbstractEntry} index is a the sequence value mod the
- * {@link RingBuffer} capacity.
- */
-class ClaimStrategy  {
-public:
-
-	/**
-     * Claim the next sequence index in the {@link RingBuffer} and increment.
-     *
-     * @return the {@link AbstractEntry} index to be used for the producer.
-     */
-    virtual long incrementAndGet() = 0;
-
-    /**
-     * Increment by a delta and get the result.
-     *
-     * @param delta to increment by.
-     * @return the result after incrementing.
-     */
-    virtual long incrementAndGet(int delta) = 0;
-
-    /**
-     * Set the current sequence value for claiming {@link AbstractEntry} in
-     * the {@link RingBuffer}
-     *
-     * @param sequence to be set as the current value.
-     */
-    virtual void setSequence(long sequence) = 0;
-
-
-}; // ClaimStrategy
 
 /**
  * Strategy to be used when there are multiple producer threads
@@ -995,7 +1043,7 @@ private:
 public:
 
     MultiThreadedStrategy() {
-    	sequence =  RingBuffer::INITIAL_CURSOR_VALUE;
+    	sequence = RingBuffer::INITIAL_CURSOR_VALUE;
     } ;
 
     virtual long incrementAndGet() { return ++sequence; }
@@ -1031,19 +1079,6 @@ public:
     virtual void setSequence(const long seq) { sequence = seq; }
 }; // SingleThreadedStrategy
 
-/**
- * Indicates the threading policy to be applied for claiming {@link
- * AbstractEntry}s by producers to the {@link RingBuffer}
- */
-struct ClaimStrategyOption {
-    /**
-     * Used by the {@link RingBuffer} as a polymorphic constructor.
-     *
-     * @return a new instance of the ClaimStrategy
-     */
-    virtual ClaimStrategy* newInstance() = 0;
-}; // Option
-
 /** Makes the {@link RingBuffer} thread safe for claiming
  * {@link AbstractEntry}s by multiple producing threads. */
 struct MultiThreaded : public ClaimStrategyOption {
@@ -1062,8 +1097,6 @@ struct SingleThreaded : public ClaimStrategyOption {
 
 
 
-
-};
 }; // namespace disruptor
 
 
