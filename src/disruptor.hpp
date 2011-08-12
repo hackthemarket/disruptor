@@ -18,6 +18,7 @@
 
 namespace disruptor {
 
+const static long INITIAL_CURSOR_VALUE = -1L;
 
 /**
  *             ---- Hacked straight out of Java library. -----
@@ -138,6 +139,104 @@ long getMinimumSequence(const std::vector<Consumer*> consumers) {
 
     return minimum;
 }
+
+/**
+ * Used to record the batch of sequences claimed in a {@link RingBuffer}.
+ */
+class SequenceBatch {
+private:
+	const int _size;
+	long _end;
+
+public:
+    /**
+     * Create a holder for tracking a batch of claimed sequences in a {@link RingBuffer}
+     * @param size of the batch to claim.
+     */
+    SequenceBatch(const int size) : _size(size), _end(INITIAL_CURSOR_VALUE)
+    { }
+
+    /**
+     * Get the end sequence of a batch.
+     *
+     * @return the end sequence in a batch
+     */
+    long getEnd() { return _end; }
+
+    /**
+     * Set the end of the batch sequence.  To be used by the {@link ProducerBarrier}.
+     *
+     * @param end sequence in the batch.
+     */
+    void setEnd(const long end) { this->_end = end; }
+
+    /**
+     * Get the size of the batch.
+     *
+     * @return the size of the batch.
+     */
+    int getSize() { return _size; }
+
+    /**
+     * Get the starting sequence for a batch.
+     *
+     * @return the starting sequence of a batch.
+     */
+    long getStart() { return _end - (_size - 1L); }
+};
+
+
+/**
+ * Abstraction for claiming {@link AbstractEntry}s in a {@link RingBuffer} while tracking dependent {@link Consumer}s
+ *
+ * @param <T> {@link AbstractEntry} implementation stored in the {@link RingBuffer}
+ */
+template <typename T>
+class ProducerBarrier {
+public:
+	/**
+     * Claim the next {@link AbstractEntry} in sequence for a producer on the {@link RingBuffer}
+     *
+     * @return the claimed {@link AbstractEntry}
+     */
+	virtual T nextEntry() = 0;
+
+    /**
+     * Claim the next batch of {@link AbstractEntry}s in sequence.
+     *
+     * @param sequenceBatch to be updated for the batch range.
+     * @return the updated sequenceBatch.
+     */
+    virtual SequenceBatch nextEntries(SequenceBatch sequenceBatch)= 0;
+
+    /**
+     * Commit an entry back to the {@link RingBuffer} to make it visible to {@link Consumer}s
+     * @param entry to be committed back to the {@link RingBuffer}
+     */
+    virtual void commit(T entry) = 0;
+
+    /**
+     * Commit the batch of entries back to the {@link RingBuffer}.
+     *
+     * @param sequenceBatch to be committed.
+     */
+    virtual void commit(SequenceBatch sequenceBatch) = 0;
+
+    /**
+     * Get the {@link AbstractEntry} for a given sequence from the underlying {@link RingBuffer}.
+     *
+     * @param sequence of the {@link AbstractEntry} to get.
+     * @return the {@link AbstractEntry} for the sequence.
+     */
+    virtual T getEntry(long sequence) = 0;
+
+    /**
+     * Delegate a call to the {@link RingBuffer#getCursor()}
+     *
+     * @return value of the cursor for entries that have been published.
+     */
+    virtual long getCursor() = 0;
+};
 
 /**
  * Coordination barrier for tracking the cursor for producers and sequence of
@@ -366,7 +465,7 @@ public:
 		long availableSequence;
 		if ((availableSequence = ringBuffer.getCursor()) < sequence)
 		{
-			boost::unique_lock< boost::shared_mutex > lock(lock);
+			boost::unique_lock< boost::shared_mutex > lock(_mutex);
 			while ((availableSequence = ringBuffer.getCursor()) < sequence)
 			{
 				if (barrier.isAlerted())
@@ -400,7 +499,7 @@ public:
 		long availableSequence;
 		if ((availableSequence = ringBuffer.getCursor()) < sequence)
 		{
-			boost::unique_lock< boost::shared_mutex > lock(lock);
+			boost::unique_lock< boost::shared_mutex > lock(_mutex);
 			while ((availableSequence = ringBuffer.getCursor()) < sequence)
 			{
 				if (barrier.isAlerted())
@@ -722,12 +821,13 @@ public:
 template<typename T>
 class ConsumerTrackingConsumerBarrier: public ConsumerBarrier<T> {
 private:
-	volatile boolean alerted = false;
-	const std::vector<Consumer*> consumers;
+	tbb::atomic<bool> _alerted;
+	const std::vector<Consumer*> _consumers;
 public:
 
-	ConsumerTrackingConsumerBarrier(const Consumer ... consumers) {
-		this.consumers = consumers;
+	ConsumerTrackingConsumerBarrier(const std::vector<Consumer*> consumers)
+	: _consumers(consumers) {
+		_alerted = false;
 	}
 
 	T getEntry(const long sequence) {
@@ -737,68 +837,69 @@ public:
 	long waitFor(const long sequence)
 	//    throws AlertException, InterruptedException
 	{
-		return	waitStrategy.waitFor(consumers, RingBuffer.this, this, sequence);
+		return	waitStrategy.waitFor(consumers, RingBuffer.this, this, _sequence);
 	}
 
-long waitFor(const long sequence, const long timeout, const TimeUnit units)
+long waitFor(const long sequence, const boost::posix_time::time_duration timeout)
 //  throws AlertException, InterruptedException
 {
-	return waitStrategy.waitFor(consumers, RingBuffer.this, this, sequence, timeout, units);
+	return waitStrategy.waitFor(consumers, RingBuffer.this, this, _sequence, timeout, units);
 }
 
-long getCursor() {return cursor;}
+	long getCursor() {return _cursor;}
 
-boolean isAlerted() {return alerted;}
+	bool isAlerted() {return _alerted;}
 
-void alert() {
-	alerted = true;
-	waitStrategy.signalAll();
-}
+	void alert() {
+		_alerted = true;
+		waitStrategy.signalAll();
+	}
 
-public void clearAlert() {alerted = false;}
+	void clearAlert() {_alerted = false;}
 }; // ConsumerTrackingConsumerBarrier
 
 /**
  * {@link ProducerBarrier} that tracks multiple {@link Consumer}s when trying to claim
  * an {@link AbstractEntry} in the {@link RingBuffer}.
  */
-private const class ConsumerTrackingProducerBarrier implements ProducerBarrier<T>
+template <typename T>
+class ConsumerTrackingProducerBarrier implements ProducerBarrier<T>
 {
-private const Consumer[] consumers;
-private long lastConsumerMinimum = RingBuffer.INITIAL_CURSOR_VALUE;
+private :
+	const std::vector<Consumer*> _consumers;
+	long lastConsumerMinimum = RingBuffer.INITIAL_CURSOR_VALUE;
 
-public ConsumerTrackingProducerBarrier(const Consumer... consumers)
-	{
-		if (0 == consumers.length)
+ConsumerTrackingProducerBarrier(const std::vector<Consumer*> consumers)
+	: _consumers(consumers)	{
+
+		if (0 == _consumers._size())
 		{
-			throw new IllegalArgumentException("There must be at least one Consumer to track for preventing ring wrap");
+			//throw new IllegalArgumentException("There must be at least one Consumer to track for preventing ring wrap");
+			std::cerr << "There must be at least one Consumer to track for "
+					"preventing ring wrap" << std::endl;
 		}
-		this.consumers = consumers;
 	}
 
-public T nextEntry()
-	{
-		const long sequence = claimStrategy.incrementAndGet();
-		ensureConsumersAreInRange(sequence);
+public:
 
-		AbstractEntry entry = entries[(int)sequence & ringModMask];
-		entry.setSequence(sequence);
+	T nextEntry() {
+		const long _sequence = claimStrategy.incrementAndGet();
+		ensureConsumersAreInRange(_sequence);
+
+		AbstractEntry entry = entries[(int)_sequence & ringModMask];
+		entry.setSequence(_sequence);
 
 		return (T)entry;
 	}
 
-public void commit(const T entry)
-	{
-		commit(entry.getSequence(), 1);
-	}
+	void commit(const T entry)	{ commit(entry.getSequence(), 1); }
 
-public SequenceBatch nextEntries(const SequenceBatch sequenceBatch)
-	{
-		const long sequence = claimStrategy.incrementAndGet(sequenceBatch.getSize());
-		sequenceBatch.setEnd(sequence);
-		ensureConsumersAreInRange(sequence);
+	SequenceBatch nextEntries(const SequenceBatch sequenceBatch) {
+		const long _sequence = claimStrategy.incrementAndGet(sequenceBatch.getSize());
+		sequenceBatch.setEnd(_sequence);
+		ensureConsumersAreInRange(_sequence);
 
-		for (long i = sequenceBatch.getStart(), end = sequenceBatch.getEnd(); i <= end; i++)
+		for (long i = sequenceBatch.getStart(), _end = sequenceBatch.getEnd(); i <= _end; i++)
 		{
 			AbstractEntry entry = entries[(int)i & ringModMask];
 			entry.setSequence(i);
@@ -807,43 +908,41 @@ public SequenceBatch nextEntries(const SequenceBatch sequenceBatch)
 		return sequenceBatch;
 	}
 
-public void commit(const SequenceBatch sequenceBatch)
+	void commit(const SequenceBatch sequenceBatch)
 	{
 		commit(sequenceBatch.getEnd(), sequenceBatch.getSize());
 	}
 
-public T getEntry(const long sequence)
-	{
-		return (T)entries[(int)sequence & ringModMask];
+	T getEntry(const long _sequence)	{
+		return (T)entries[(int)_sequence & ringModMask];
 	}
 
-public long getCursor()
-	{
-		return cursor;
-	}
+	long getCursor() { return _cursor;	}
 
-private void ensureConsumersAreInRange(const long sequence)
+	void ensureConsumersAreInRange(const long _sequence)
 	{
-		const long wrapPoint = sequence - entries.length;
+		const long wrapPoint = _sequence - entries.length;
 		while (wrapPoint > lastConsumerMinimum &&
 				wrapPoint > (lastConsumerMinimum = getMinimumSequence(consumers)))
 		{
-			Thread.yield();
+			boost::thread::yield();
 		}
 	}
 
-private void commit(const long sequence, const long batchSize)
+private:
+
+	void commit(const long _sequence, const long batchSize)
 	{
-		if (ClaimStrategy.Option.MULTI_THREADED == claimStrategyOption)
+		if (ClaimStrategy.Option.MULTI_THREADED == claimStrategyOption )
 		{
-			const long expectedSequence = sequence - batchSize;
+			const long expectedSequence = _sequence - batchSize;
 			while (expectedSequence != cursor)
 			{
 				// busy spin
 			}
 		}
 
-		cursor = sequence;
+		cursor = _sequence;
 		waitStrategy.signalAll();
 	}
 }
@@ -852,53 +951,53 @@ private void commit(const long sequence, const long batchSize)
  * {@link ForceFillProducerBarrier} that tracks multiple {@link Consumer}s when trying to claim
  * a {@link AbstractEntry} in the {@link RingBuffer}.
  */
-private const class ForceFillConsumerTrackingProducerBarrier implements ForceFillProducerBarrier<T>
-{
-private const Consumer[] consumers;
-private long lastConsumerMinimum = RingBuffer.INITIAL_CURSOR_VALUE;
-
-public ForceFillConsumerTrackingProducerBarrier(const Consumer... consumers)
-	{
-		if (0 == consumers.length)
-		{
-			throw new IllegalArgumentException("There must be at least one Consumer to track for preventing ring wrap");
-		}
-		this.consumers = consumers;
-	}
-
-public T claimEntry(const long sequence)
-	{
-		ensureConsumersAreInRange(sequence);
-
-		AbstractEntry entry = entries[(int)sequence & ringModMask];
-		entry.setSequence(sequence);
-
-		return (T)entry;
-	}
-
-public void commit(const T entry)
-	{
-		long sequence = entry.getSequence();
-		claimStrategy.setSequence(sequence);
-		cursor = sequence;
-		waitStrategy.signalAll();
-	}
-
-public long getCursor()
-	{
-		return cursor;
-	}
-
-private void ensureConsumersAreInRange(const long sequence)
-	{
-		const long wrapPoint = sequence - entries.length;
-		while (wrapPoint > lastConsumerMinimum &&
-				wrapPoint > (lastConsumerMinimum = getMinimumSequence(consumers)))
-		{
-			Thread.yield();
-		}
-	}
-}
+//class ForceFillConsumerTrackingProducerBarrier : public ForceFillProducerBarrier<T>
+//{
+//private const Consumer[] consumers;
+//private long lastConsumerMinimum = RingBuffer.INITIAL_CURSOR_VALUE;
+//
+//public ForceFillConsumerTrackingProducerBarrier(const Consumer... consumers)
+//	{
+//		if (0 == consumers.length)
+//		{
+//			throw new IllegalArgumentException("There must be at least one Consumer to track for preventing ring wrap");
+//		}
+//		this.consumers = consumers;
+//	}
+//
+//public T claimEntry(const long sequence)
+//	{
+//		ensureConsumersAreInRange(sequence);
+//
+//		AbstractEntry entry = entries[(int)sequence & ringModMask];
+//		entry.setSequence(sequence);
+//
+//		return (T)entry;
+//	}
+//
+//public void commit(const T entry)
+//	{
+//		long sequence = entry.getSequence();
+//		claimStrategy.setSequence(sequence);
+//		cursor = sequence;
+//		waitStrategy.signalAll();
+//	}
+//
+//public long getCursor()
+//	{
+//		return cursor;
+//	}
+//
+//private void ensureConsumersAreInRange(const long sequence)
+//	{
+//		const long wrapPoint = sequence - entries.length;
+//		while (wrapPoint > lastConsumerMinimum &&
+//				wrapPoint > (lastConsumerMinimum = getMinimumSequence(consumers)))
+//		{
+//			Thread.yield();
+//		}
+//	}
+//}
 
 
 template <typename T>
@@ -912,7 +1011,7 @@ private:
 	const WaitStrategy* _waitStrategy;
 
 public:
-	const static long INITIAL_CURSOR_VALUE = -1L;
+//	const static long INITIAL_CURSOR_VALUE = -1L;
 	long p1, p2, p3, p4, p5, p6, p7; // cache line padding
 	long p8, p9, p10, p11, p12, p13, p14; // cache line padding
 
@@ -1038,22 +1137,22 @@ void fill(const EntryFactory<T> entryFactory) {
 class MultiThreadedStrategy : public ClaimStrategy  {
 private:
 
-    tbb::atomic<long> sequence;
+    tbb::atomic<long> _sequence;
 
 public:
 
     MultiThreadedStrategy() {
-    	sequence = RingBuffer::INITIAL_CURSOR_VALUE;
-    } ;
-
-    virtual long incrementAndGet() { return ++sequence; }
-
-    virtual long incrementAndGet(const int delta) {
-        sequence+=delta;
-        return sequence;
+    	_sequence = INITIAL_CURSOR_VALUE ;
     }
 
-    virtual void setSequence(const long seq) { sequence = seq; }
+    virtual long incrementAndGet() { return ++_sequence; }
+
+    virtual long incrementAndGet(const int delta) {
+        _sequence+=delta;
+        return _sequence;
+    }
+
+    virtual void setSequence(const long seq) { _sequence = seq; }
 
 }; // MultiThreadedStrategy
 
@@ -1064,19 +1163,19 @@ public:
 class SingleThreadedStrategy : public ClaimStrategy {
 private:
 
-	long sequence;
+	long _sequence;
 
 public:
-	SingleThreadedStrategy() : sequence(RingBuffer::INITIAL_CURSOR_VALUE) {}
+	SingleThreadedStrategy() : _sequence(INITIAL_CURSOR_VALUE) {}
 
-	virtual long incrementAndGet() { return ++sequence; }
+	virtual long incrementAndGet() { return ++_sequence; }
 
 	virtual long incrementAndGet(const int delta) {
-        sequence += delta;
-        return sequence;
+        _sequence += delta;
+        return _sequence;
     }
 
-    virtual void setSequence(const long seq) { sequence = seq; }
+    virtual void setSequence(const long seq) { _sequence = seq; }
 }; // SingleThreadedStrategy
 
 /** Makes the {@link RingBuffer} thread safe for claiming
