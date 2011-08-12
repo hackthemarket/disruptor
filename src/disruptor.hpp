@@ -42,7 +42,7 @@ const static long INITIAL_CURSOR_VALUE = -1L;
  *     is equal to zero.
  * @since 1.5
  */
-int numberOfLeadingZeros(int i) {
+inline int numberOfLeadingZeros(int i) {
     // HD, Figure 5-6
     if (i == 0) return 32;
     int n = 1;
@@ -61,7 +61,7 @@ int numberOfLeadingZeros(int i) {
   * @param x Value to round up
   * @return The next power of 2 from x inclusive
   */
- int ceilingNextPowerOfTwo(const int x) {
+inline int ceilingNextPowerOfTwo(const int x) {
      return 1 << (32 - numberOfLeadingZeros(x - 1));
  }
 
@@ -92,7 +92,7 @@ public:
 }; // class AbstractEntry
 
 
-std::ostream& operator<<(std::ostream& os, AbstractEntry& entry) {
+inline std::ostream& operator<<(std::ostream& os, AbstractEntry& entry) {
 	os << entry.toString();
 	return os;
 }
@@ -128,7 +128,7 @@ public:
  * @param consumers to compare.
  * @return the minimum sequence found or Long.MAX_VALUE if the array is empty.
  */
-long getMinimumSequence(const std::vector<Consumer*> consumers) {
+inline long getMinimumSequence(const std::vector<Consumer*> consumers) {
     long minimum = LONG_MAX;
 
     for (int i = 0; i < consumers.size(); i++) {
@@ -150,7 +150,8 @@ private:
 
 public:
     /**
-     * Create a holder for tracking a batch of claimed sequences in a {@link RingBuffer}
+     * Create a holder for tracking a batch of claimed sequences
+     * in a {@link RingBuffer}
      * @param size of the batch to claim.
      */
     SequenceBatch(const int size) : _size(size), _end(INITIAL_CURSOR_VALUE)
@@ -164,7 +165,8 @@ public:
     long getEnd() { return _end; }
 
     /**
-     * Set the end of the batch sequence.  To be used by the {@link ProducerBarrier}.
+     * Set the end of the batch sequence.  To be used by
+     * the {@link ProducerBarrier}.
      *
      * @param end sequence in the batch.
      */
@@ -187,15 +189,18 @@ public:
 
 
 /**
- * Abstraction for claiming {@link AbstractEntry}s in a {@link RingBuffer} while tracking dependent {@link Consumer}s
+ * Abstraction for claiming {@link AbstractEntry}s in a {@link RingBuffer}
+ * while tracking dependent {@link Consumer}s
  *
- * @param <T> {@link AbstractEntry} implementation stored in the {@link RingBuffer}
+ * @param <T> {@link AbstractEntry} implementation stored in
+ * the {@link RingBuffer}
  */
 template <typename T>
 class ProducerBarrier {
 public:
 	/**
-     * Claim the next {@link AbstractEntry} in sequence for a producer on the {@link RingBuffer}
+     * Claim the next {@link AbstractEntry} in sequence for a producer
+     * on the {@link RingBuffer}
      *
      * @return the claimed {@link AbstractEntry}
      */
@@ -210,7 +215,8 @@ public:
     virtual SequenceBatch nextEntries(SequenceBatch sequenceBatch)= 0;
 
     /**
-     * Commit an entry back to the {@link RingBuffer} to make it visible to {@link Consumer}s
+     * Commit an entry back to the {@link RingBuffer} to make it visible
+     * to {@link Consumer}s
      * @param entry to be committed back to the {@link RingBuffer}
      */
     virtual void commit(T entry) = 0;
@@ -223,7 +229,8 @@ public:
     virtual void commit(SequenceBatch sequenceBatch) = 0;
 
     /**
-     * Get the {@link AbstractEntry} for a given sequence from the underlying {@link RingBuffer}.
+     * Get the {@link AbstractEntry} for a given sequence from the
+     * underlying {@link RingBuffer}.
      *
      * @param sequence of the {@link AbstractEntry} to get.
      * @return the {@link AbstractEntry} for the sequence.
@@ -242,7 +249,8 @@ public:
  * Coordination barrier for tracking the cursor for producers and sequence of
  * dependent {@link Consumer}s for a {@link RingBuffer}
  *
- * @param <T> {@link AbstractEntry} implementation stored in the {@link RingBuffer}
+ * @param <T> {@link AbstractEntry} implementation stored in
+ * the {@link RingBuffer}
  */
 template < typename T >
 class ConsumerBarrier {
@@ -262,23 +270,30 @@ public:
      *
      * @param sequence to wait for
      * @return the sequence up to which is available
-     * @throws AlertException if a status change has occurred for the Disruptor
-     * @throws InterruptedException if the thread needs awaking on a condition variable.
+     * @throws AlertException if a status change has occurred for
+     *  the Disruptor
+     * @throws InterruptedException if the thread needs awaking on
+     * a condition variable.
      */
-    virtual long waitFor(long sequence) ; //throws AlertException, InterruptedException;
+    virtual long waitFor(long sequence) ;
+    //throws AlertException, InterruptedException;
 
     /**
-     * Wait for the given sequence to be available for consumption with a time out.
+     * Wait for the given sequence to be available for consumption
+     * with a time out.
      *
      * @param sequence to wait for
      * @param timeout value
      * @param units for the timeout value
      * @return the sequence up to which is available
-     * @throws AlertException if a status change has occurred for the Disruptor
-     * @throws InterruptedException if the thread needs awaking on a condition variable.
+     * @throws AlertException if a status change has occurred
+     * for the Disruptor
+     * @throws InterruptedException if the thread needs awaking
+     *  on a condition variable.
      */
-    virtual long waitFor(long sequence, boost::posix_time::time_duration timeout) ;
-//    long waitFor(long sequence, long timeout, TimeUnit units) throws AlertException, InterruptedException;
+    virtual long waitFor(long sequence,
+    		boost::posix_time::time_duration timeout) ;
+    //throws AlertException, InterruptedException;
 
     /**
      * Delegate a call to the {@link RingBuffer#getCursor()}
@@ -294,7 +309,8 @@ public:
     virtual bool isAlerted();
 
     /**
-     * Alert the consumers of a status change and stay in this status until cleared.
+     * Alert the consumers of a status change and stay in this status
+     *  until cleared.
      */
     virtual void alert();
 
@@ -304,6 +320,40 @@ public:
     virtual void clearAlert();
 
 };
+/**
+ * Abstraction for claiming {@link AbstractEntry}s in a {@link RingBuffer} while tracking dependent {@link Consumer}s.
+ *
+ * This barrier can be used to pre-fill a {@link RingBuffer} but only when no other producers are active.
+ *
+ * @param <T> {@link AbstractEntry} implementation stored in the {@link RingBuffer}
+ */
+template <typename T>
+class ForceFillProducerBarrier {
+public:
+    /**
+     * Claim a specific sequence in the {@link RingBuffer} when only one producer is involved.
+     *
+     * @param sequence to be claimed.
+     * @return the claimed {@link AbstractEntry}
+     */
+    T claimEntry(long sequence);
+
+    /**
+     * Commit an entry back to the {@link RingBuffer} to make it visible to {@link Consumer}s.
+     * Only use this method when forcing a sequence and you are sure only one producer exists.
+     * This will cause the {@link RingBuffer} to advance the {@link RingBuffer#getCursor()} to this sequence.
+     *
+     * @param entry to be committed back to the {@link RingBuffer}
+     */
+    void commit(T entry);
+
+    /**
+     * Delegate a call to the {@link RingBuffer#getCursor()}
+     *
+     * @return value of the cursor for entries that have been published.
+     */
+    long getCursor();
+};// ForceFillProducerBarrier
 
 /**
  * Callback interface to be implemented for processing {@link AbstractEntry}s
@@ -354,9 +404,11 @@ class ExceptionHandler {
 public:
 
 	/**
-     * Strategy for handling uncaught exceptions when processing an {@link AbstractEntry}.
+     * Strategy for handling uncaught exceptions when processing
+     * an {@link AbstractEntry}.
      *
-     * If the strategy wishes to suspend further processing by the {@link BatchConsumer}
+     * If the strategy wishes to suspend further processing by the
+     * {@link BatchConsumer}
      * then is should throw a {@link RuntimeException}.
      *
      * @param ex the exception that propagated from the {@link BatchHandler}
@@ -368,13 +420,16 @@ public:
 };
 
 /**
- * Convenience implementation of an exception handler that using standard JDK logging to log
- * the exception as {@link Level}.SEVERE and re-throw it wrapped in a {@link RuntimeException}
+ * Convenience implementation of an exception handler that using standard
+ *  JDK logging to log
+ * the exception as {@link Level}.SEVERE and re-throw it wrapped in a
+ * {@link RuntimeException}
  */
 class FatalExceptionHandler : public ExceptionHandler {
 
 public:
-//    private const static Logger LOGGER = Logger.getLogger(FatalExceptionHandler.class.getName());
+//    private const static Logger LOGGER = Logger.getLogger
+	//(FatalExceptionHandler.class.getName());
 //    private const Logger logger;
 
     FatalExceptionHandler() { }
@@ -382,7 +437,8 @@ public:
     virtual void handle(const void * ex, const AbstractEntry& currentEntry) {
         //logger.log(Level.SEVERE, "Exception processing: " + currentEntry, ex);
 
-    	std::cerr << "Exception processing " << currentEntry.toString() << std::endl;
+    	std::cerr << "Exception processing "
+    			<< currentEntry.toString() << std::endl;
 
 //        throw new RuntimeException(ex);
     }
@@ -403,13 +459,15 @@ template <class T> class RingBuffer; // fwd
  */
 class WaitStrategy {
     /**
-     * Wait for the given sequence to be available for consumption in a {@link RingBuffer}
+     * Wait for the given sequence to be available for consumption
+     * in a {@link RingBuffer}
      *
      * @param consumers further back the chain that must advance first
      * @param ringBuffer on which to wait.
      * @param barrier the consumer is waiting on.
      * @param sequence to be waited on.
-     * @return the sequence that is available which may be greater than the requested sequence.
+     * @return the sequence that is available which may be greater than
+     * the requested sequence.
      * @throws AlertException if the status of the Disruptor has changed.
      * @throws InterruptedException if the thread is interrupted.
      */
@@ -419,14 +477,16 @@ class WaitStrategy {
 //        throws AlertException, InterruptedException;
 
     /**
-     * Wait for the given sequence to be available for consumption in a {@link RingBuffer} with a timeout specified.
+     * Wait for the given sequence to be available for consumption in a
+     *  {@link RingBuffer} with a timeout specified.
      *
      * @param consumers further back the chain that must advance first
      * @param ringBuffer on which to wait.
      * @param barrier the consumer is waiting on.
      * @param sequence to be waited on.
      * @param timeout value to abort after.
-     * @return the sequence that is available which may be greater than the requested sequence.
+     * @return the sequence that is available which may be greater than the
+     *  requested sequence.
      * @throws AlertException if the status of the Disruptor has changed.
      * @throws InterruptedException if the thread is interrupted.
      */
@@ -444,9 +504,11 @@ class WaitStrategy {
 
 
 /**
- * Blocking strategy that uses a lock and condition variable for {@link Consumer}s waiting on a barrier.
+ * Blocking strategy that uses a lock and condition variable for
+ * {@link Consumer}s waiting on a barrier.
  *
- * This strategy should be used when performance and low-latency are not as important as CPU resource.
+ * This strategy should be used when performance and low-latency are not
+ *  as important as CPU resource.
  */
 class BlockingStrategy : public WaitStrategy {
 private:
@@ -479,7 +541,8 @@ public:
 
 		if (0 != consumers.size())
 		{
-			while ((availableSequence = getMinimumSequence(consumers)) < sequence)
+			while ((availableSequence =
+					getMinimumSequence(consumers)) < sequence)
 			{
 				if (barrier.isAlerted())
 				{
@@ -517,7 +580,8 @@ public:
 
 		if (0 != consumers.size())
 		{
-			while ((availableSequence = getMinimumSequence(consumers)) < sequence)
+			while ((availableSequence =
+					getMinimumSequence(consumers)) < sequence)
 			{
 				if (barrier.isAlerted())
 				{
@@ -625,9 +689,11 @@ public:
 }; // YieldingStrategy
 
     /**
- * Busy Spin strategy that uses a busy spin loop for {@link Consumer}s waiting on a barrier.
+ * Busy Spin strategy that uses a busy spin loop for {@link Consumer}s
+ * waiting on a barrier.
  *
- * This strategy will use CPU resource to avoid syscalls which can introduce latency jitter.  It is best
+ * This strategy will use CPU resource to avoid syscalls which can introduce
+ *  latency jitter.  It is best
  * used when threads can be bound to specific CPU cores.
  */
 class BusySpinStrategy: public WaitStrategy {
@@ -653,7 +719,8 @@ public:
 		}
 		else
 		{
-			while ((availableSequence = getMinimumSequence(consumers)) < sequence)
+			while ((availableSequence =
+					getMinimumSequence(consumers)) < sequence)
 			{
 				if (barrier.isAlerted())
 				{
@@ -822,57 +889,66 @@ template<typename T>
 class ConsumerTrackingConsumerBarrier: public ConsumerBarrier<T> {
 private:
 	tbb::atomic<bool> _alerted;
-	const std::vector<Consumer*> _consumers;
+	const RingBuffer<T>& _ring;
+  	const std::vector<Consumer*> _consumers;
 public:
 
-	ConsumerTrackingConsumerBarrier(const std::vector<Consumer*> consumers)
-	: _consumers(consumers) {
+	ConsumerTrackingConsumerBarrier(const std::vector<Consumer*> consumers,
+			const RingBuffer<T>& ring)
+	: _consumers(consumers), _ring(ring) {
 		_alerted = false;
 	}
 
 	T getEntry(const long sequence) {
-		return (T) entries[(int) sequence & ringModMask];
+		return _ring._entries[(int) sequence & _ring._ringModMask];
 	}
 
 	long waitFor(const long sequence)
 	//    throws AlertException, InterruptedException
 	{
-		return	waitStrategy.waitFor(consumers, RingBuffer.this, this, _sequence);
+		return	_ring._waitStrategy.waitFor
+				(_consumers, _ring, this, _ring._sequence);
 	}
 
-long waitFor(const long sequence, const boost::posix_time::time_duration timeout)
-//  throws AlertException, InterruptedException
-{
-	return waitStrategy.waitFor(consumers, RingBuffer.this, this, _sequence, timeout, units);
-}
+	long waitFor(const long sequence, const boost::posix_time::time_duration timeout)
+	//  throws AlertException, InterruptedException
+	{
+		return _ring._waitStrategy.waitFor
+				(_consumers, _ring, this, sequence, timeout);
+	}
 
-	long getCursor() {return _cursor;}
+	long getCursor() { return _ring._cursor; }
 
 	bool isAlerted() {return _alerted;}
 
 	void alert() {
 		_alerted = true;
-		waitStrategy.signalAll();
+		_ring._waitStrategy.signalAll();
 	}
 
 	void clearAlert() {_alerted = false;}
 }; // ConsumerTrackingConsumerBarrier
 
 /**
- * {@link ProducerBarrier} that tracks multiple {@link Consumer}s when trying to claim
+ * {@link ProducerBarrier} that tracks multiple {@link Consumer}s when trying
+ *  to claim
  * an {@link AbstractEntry} in the {@link RingBuffer}.
  */
 template <typename T>
-class ConsumerTrackingProducerBarrier implements ProducerBarrier<T>
-{
+class ConsumerTrackingProducerBarrier : public ProducerBarrier<T> {
 private :
 	const std::vector<Consumer*> _consumers;
-	long lastConsumerMinimum = RingBuffer.INITIAL_CURSOR_VALUE;
+	long _lastConsumerMinimum;
+	const RingBuffer<T>& _ring;
 
-ConsumerTrackingProducerBarrier(const std::vector<Consumer*> consumers)
-	: _consumers(consumers)	{
+public:
 
-		if (0 == _consumers._size())
+	ConsumerTrackingProducerBarrier(const std::vector<Consumer*> consumers,
+			const RingBuffer<T>& ring)
+	: _consumers(consumers), _lastConsumerMinimum(INITIAL_CURSOR_VALUE),
+	  _ring(ring) {
+
+		if (0 == _consumers.size())
 		{
 			//throw new IllegalArgumentException("There must be at least one Consumer to track for preventing ring wrap");
 			std::cerr << "There must be at least one Consumer to track for "
@@ -880,14 +956,12 @@ ConsumerTrackingProducerBarrier(const std::vector<Consumer*> consumers)
 		}
 	}
 
-public:
-
 	T nextEntry() {
-		const long _sequence = claimStrategy.incrementAndGet();
-		ensureConsumersAreInRange(_sequence);
+		const long sequence = _ring._claimStrategy.incrementAndGet();
+		ensureConsumersAreInRange(sequence);
 
-		AbstractEntry entry = entries[(int)_sequence & ringModMask];
-		entry.setSequence(_sequence);
+		AbstractEntry entry = _ring.entries[(int)sequence & _ring.ringModMask];
+		entry.setSequence(sequence);
 
 		return (T)entry;
 	}
@@ -895,13 +969,14 @@ public:
 	void commit(const T entry)	{ commit(entry.getSequence(), 1); }
 
 	SequenceBatch nextEntries(const SequenceBatch sequenceBatch) {
-		const long _sequence = claimStrategy.incrementAndGet(sequenceBatch.getSize());
-		sequenceBatch.setEnd(_sequence);
-		ensureConsumersAreInRange(_sequence);
+		const long sequence = _ring._claimStrategy
+				.incrementAndGet(sequenceBatch.getSize());
+		sequenceBatch.setEnd(sequence);
+		ensureConsumersAreInRange(sequence);
 
 		for (long i = sequenceBatch.getStart(), _end = sequenceBatch.getEnd(); i <= _end; i++)
 		{
-			AbstractEntry entry = entries[(int)i & ringModMask];
+			AbstractEntry entry = _ring._entries[(int)i & _ring._ringModMask];
 			entry.setSequence(i);
 		}
 
@@ -913,17 +988,17 @@ public:
 		commit(sequenceBatch.getEnd(), sequenceBatch.getSize());
 	}
 
-	T getEntry(const long _sequence)	{
-		return (T)entries[(int)_sequence & ringModMask];
+	T getEntry(const long sequence)	{
+		return _ring._entries[(int) sequence & _ring._ringModMask];
 	}
 
-	long getCursor() { return _cursor;	}
+	long getCursor() { return _ring._cursor;	}
 
-	void ensureConsumersAreInRange(const long _sequence)
+	void ensureConsumersAreInRange(const long sequence)
 	{
-		const long wrapPoint = _sequence - entries.length;
-		while (wrapPoint > lastConsumerMinimum &&
-				wrapPoint > (lastConsumerMinimum = getMinimumSequence(consumers)))
+		const long wrapPoint = sequence - _ring._entries.length;
+		while (wrapPoint > _lastConsumerMinimum &&
+				wrapPoint > (_lastConsumerMinimum = getMinimumSequence(_consumers)))
 		{
 			boost::thread::yield();
 		}
@@ -931,202 +1006,190 @@ public:
 
 private:
 
-	void commit(const long _sequence, const long batchSize)
+	void commit(const long sequence, const long batchSize)
 	{
-		if (ClaimStrategy.Option.MULTI_THREADED == claimStrategyOption )
-		{
-			const long expectedSequence = _sequence - batchSize;
-			while (expectedSequence != cursor)
-			{
-				// busy spin
-			}
-		}
-
-		cursor = _sequence;
-		waitStrategy.signalAll();
+//		if (ClaimStrategy.Option.MULTI_THREADED == claimStrategyOption )
+//		{
+//			const long expectedSequence = sequence - batchSize;
+//			while (expectedSequence != _ring._cursor)
+//			{
+//				// busy spin
+//			}
+//		}
+//
+//		_ring._cursor = sequence;
+//		_ring._waitStrategy.signalAll();
 	}
-}
+};
 
 /**
  * {@link ForceFillProducerBarrier} that tracks multiple {@link Consumer}s when trying to claim
  * a {@link AbstractEntry} in the {@link RingBuffer}.
  */
-//class ForceFillConsumerTrackingProducerBarrier : public ForceFillProducerBarrier<T>
-//{
-//private const Consumer[] consumers;
-//private long lastConsumerMinimum = RingBuffer.INITIAL_CURSOR_VALUE;
-//
-//public ForceFillConsumerTrackingProducerBarrier(const Consumer... consumers)
-//	{
-//		if (0 == consumers.length)
-//		{
+template <typename T>
+class ForceFillConsumerTrackingProducerBarrier
+	: public ForceFillProducerBarrier<T>
+{
+private:
+		const std::vector<Consumer*> _consumers;
+		long _lastConsumerMinimum;
+		const RingBuffer<T>& _ring;
+
+public:
+		ForceFillConsumerTrackingProducerBarrier
+			(const std::vector<Consumer*> consumers, const RingBuffer<T>& ring)
+		: _consumers(consumers), _lastConsumerMinimum(INITIAL_CURSOR_VALUE),
+		  _ring(ring) {
+		if (0 == _consumers.size())
+		{
 //			throw new IllegalArgumentException("There must be at least one Consumer to track for preventing ring wrap");
-//		}
-//		this.consumers = consumers;
-//	}
-//
-//public T claimEntry(const long sequence)
-//	{
-//		ensureConsumersAreInRange(sequence);
-//
-//		AbstractEntry entry = entries[(int)sequence & ringModMask];
-//		entry.setSequence(sequence);
-//
-//		return (T)entry;
-//	}
-//
-//public void commit(const T entry)
-//	{
-//		long sequence = entry.getSequence();
-//		claimStrategy.setSequence(sequence);
-//		cursor = sequence;
-//		waitStrategy.signalAll();
-//	}
-//
-//public long getCursor()
-//	{
-//		return cursor;
-//	}
-//
-//private void ensureConsumersAreInRange(const long sequence)
-//	{
-//		const long wrapPoint = sequence - entries.length;
-//		while (wrapPoint > lastConsumerMinimum &&
-//				wrapPoint > (lastConsumerMinimum = getMinimumSequence(consumers)))
-//		{
+			std::cerr << "There must be at least one Consumer to track for "
+					"preventing ring wrap" << std::endl;
+
+		}
+	}
+
+	T claimEntry(const long sequence)	{
+		ensureConsumersAreInRange(sequence);
+
+		T entry = _ring._entries[(int)sequence & _ring._ringModMask];
+		entry.setSequence(sequence);
+
+		return entry;
+	}
+
+	void commit(const T entry) {
+		long sequence = entry.getSequence();
+		_ring._claimStrategy.setSequence(sequence);
+		_ring._cursor = sequence;
+		_ring._waitStrategy.signalAll();
+	}
+
+	long getCursor() { return _ring.cursor;	}
+
+private :
+
+	void ensureConsumersAreInRange(const long sequence)	{
+		const long wrapPoint = sequence - _ring._entries.size();
+		while (wrapPoint > _lastConsumerMinimum &&
+				wrapPoint > (_lastConsumerMinimum = getMinimumSequence(_consumers)))
+		{
+			boost::this_thread::yield();
 //			Thread.yield();
-//		}
-//	}
-//}
+		}
+	}
+}; // ForceFillConsumerTracingProducerBarrier
 
 
 template <typename T>
 class RingBuffer {
 private:
 	volatile long _cursor;
-	const std::vector<AbstractEntry> _entries;
 	const int _ringModMask;
+	const std::vector<AbstractEntry> _entries;
 	const ClaimStrategy* _claimStrategy;
 	const ClaimStrategyOption* _claimStrategyOption;
 	const WaitStrategy* _waitStrategy;
+
+	friend class ConsumerTrackingConsumerBarrier<T>;
+	friend class ConsumerTrackingProducerBarrier<T>;
 
 public:
 //	const static long INITIAL_CURSOR_VALUE = -1L;
 	long p1, p2, p3, p4, p5, p6, p7; // cache line padding
 	long p8, p9, p10, p11, p12, p13, p14; // cache line padding
 
+	/**
+	 * Construct a RingBuffer with the full option set.
+	 *
+	 * @param entryFactory to create {@link AbstractEntry}s for filling the RingBuffer
+	 * @param size of the RingBuffer that will be rounded up to the next power of 2
+	 * @param claimStrategyOption threading strategy for producers claiming {@link AbstractEntry}s in the ring.
+	 * @param waitStrategyOption waiting strategy employed by consumers waiting on {@link AbstractEntry}s becoming available.
+	 */
+	RingBuffer(const EntryFactory<T> entryFactory, const int size,
+					  const ClaimStrategyOption* claimStrategyOption,
+					  const WaitStrategyOption* waitStrategyOption)
+		: _cursor(INITIAL_CURSOR_VALUE) ,
+		  _ringModMask(ceilingNextPowerOfTwo(size)-1),
+		  _entries(_ringModMask+1),
+		  _claimStrategy(claimStrategyOption->newInstance()),
+		  _claimStrategyOption(claimStrategyOption),
+		  _waitStrategy(waitStrategyOption->newInstance())
+	{
 
+		fill(entryFactory);
+	}
 
-/**
- * Construct a RingBuffer with the full option set.
- *
- * @param entryFactory to create {@link AbstractEntry}s for filling the RingBuffer
- * @param size of the RingBuffer that will be rounded up to the next power of 2
- * @param claimStrategyOption threading strategy for producers claiming {@link AbstractEntry}s in the ring.
- * @param waitStrategyOption waiting strategy employed by consumers waiting on {@link AbstractEntry}s becoming available.
- */
-RingBuffer(const EntryFactory<T> entryFactory, const int size,
-                  const ClaimStrategyOption* claimStrategyOption,
-                  const WaitStrategyOption* waitStrategyOption)
-	: _cursor(INITIAL_CURSOR_VALUE) ,
-	  _ringModMask(ceilingNextPowerOfTwo(size)-1),
-		_claimStrategy(claimStrategyOption->newInstance()),
-	  _claimStrategyOption(claimStrategyOption),
-	  _waitStrategy(waitStrategyOption->newInstance())
+	/**
+	 * Create a {@link ConsumerBarrier} that gates on the RingBuffer and a list of
+	 * {@link Consumer}s
+	 *
+	 * @param consumersToTrack this barrier will track
+	 * @return the barrier gated as required
+	 */
+	ConsumerBarrier<T>
+	createConsumerBarrier(const std::vector<Consumer> consumersToTrack) {
+		return new ConsumerTrackingConsumerBarrier<T>(consumersToTrack, this);
+	}
 
-{
-    int sizeAsPowerOfTwo = ceilingNextPowerOfTwo(size);
-    ringModMask = sizeAsPowerOfTwo - 1;
-    entries = new AbstractEntry[sizeAsPowerOfTwo];
+	/**
+	 * Create a {@link ProducerBarrier} on this RingBuffer that tracks dependent
+	 *  {@link Consumer}s.
+	 *
+	 * @param consumersToTrack to be tracked to prevent wrapping.
+	 * @return a {@link ProducerBarrier} with the above configuration.
+	 */
+	 ProducerBarrier<T> createProducerBarrier
+	 	 (const std::vector<Consumer> consumersToTrack)
+	 {
+		return new ConsumerTrackingProducerBarrier<T>(consumersToTrack, this);
+	 }
 
-    _claimStrategy = claimStrategyOption.newInstance();
-    _waitStrategy = waitStrategyOption.newInstance();
+	/**
+	 * Create a {@link ForceFillProducerBarrier} on this RingBuffer that tracks
+	 * dependent {@link Consumer}s.  This barrier is to be used for filling a
+	 * RingBuffer when no other producers exist.
+	 *
+	 * @param consumersToTrack to be tracked to prevent wrapping.
+	 * @return a {@link ForceFillProducerBarrier} with the above configuration.
+	 */
+	ForceFillProducerBarrier<T> createForceFillProducerBarrier(const std::vector<Consumer> consumersToTrack)
+	{
+		return new ForceFillConsumerTrackingProducerBarrier<T>(consumersToTrack);
+	}
 
-    fill(entryFactory);
-}
+	/**
+	 * The capacity of the RingBuffer to hold entries.
+	 *
+	 * @return the size of the RingBuffer.
+	 */
+	int getCapacity() { return _entries.size(); }
 
-/**
- * Construct a RingBuffer with default strategies of:
- * {@link ClaimStrategy.Option#MULTI_THREADED} and {@link WaitStrategy.Option#BLOCKING}
- *
- * @param entryFactory to create {@link AbstractEntry}s for filling the RingBuffer
- * @param size of the RingBuffer that will be rounded up to the next power of 2
- */
-RingBuffer(const EntryFactory<T> entryFactory, const int size)
-{
-    this(entryFactory, size,
-         MultiThreadedStrategy,
-         WaitStrategy.Option.BLOCKING);
-}
+	/**
+	 * Get the current sequence that producers have committed to the RingBuffer.
+	 *
+	 * @return the current committed sequence.
+	 */
+	long getCursor() { return _cursor; }
 
-/**
- * Create a {@link ConsumerBarrier} that gates on the RingBuffer and a list of
- * {@link Consumer}s
- *
- * @param consumersToTrack this barrier will track
- * @return the barrier gated as required
- */
-ConsumerBarrier<T>
-createConsumerBarrier(const std::vector<Consumer> consumersToTrack) {
-    return new ConsumerTrackingConsumerBarrier(consumersToTrack);
-}
-
-/**
- * Create a {@link ProducerBarrier} on this RingBuffer that tracks dependent
- *  {@link Consumer}s.
- *
- * @param consumersToTrack to be tracked to prevent wrapping.
- * @return a {@link ProducerBarrier} with the above configuration.
- */
- ProducerBarrier<T> createProducerBarrier(const std::vector<Consumer> consumersToTrack)
-{
-    return new ConsumerTrackingProducerBarrier(consumersToTrack);
-}
-
-/**
- * Create a {@link ForceFillProducerBarrier} on this RingBuffer that tracks
- * dependent {@link Consumer}s.  This barrier is to be used for filling a
- * RingBuffer when no other producers exist.
- *
- * @param consumersToTrack to be tracked to prevent wrapping.
- * @return a {@link ForceFillProducerBarrier} with the above configuration.
- */
-ForceFillProducerBarrier<T> createForceFillProducerBarrier(const std::vector<Consumer> consumersToTrack)
-{
-    return new ForceFillConsumerTrackingProducerBarrier(consumersToTrack);
-}
-
-/**
- * The capacity of the RingBuffer to hold entries.
- *
- * @return the size of the RingBuffer.
- */
-int getCapacity() { return entries.length; }
-
-/**
- * Get the current sequence that producers have committed to the RingBuffer.
- *
- * @return the current committed sequence.
- */
-long getCursor() { return cursor; }
-
-/**
- * Get the {@link AbstractEntry} for a given sequence in the RingBuffer.
- *
- * @param sequence for the {@link AbstractEntry}
- * @return {@link AbstractEntry} for the sequence
- */
-T getEntry(const long sequence) {
-    return (T)entries[(int)sequence & ringModMask];
-}
+	/**
+	 * Get the {@link AbstractEntry} for a given sequence in the RingBuffer.
+	 *
+	 * @param sequence for the {@link AbstractEntry}
+	 * @return {@link AbstractEntry} for the sequence
+	 */
+	T getEntry(const long sequence) {
+		return _entries[(int) sequence & _ringModMask];
+	}
 
 private:
 
-void fill(const EntryFactory<T> entryFactory) {
-    for (int i = 0; i < entries.length; i++) {
-        entries[i] = entryFactory.create();
-    }
-};
+	void fill(const EntryFactory<T> entryFactory) {
+		for (int i = 0; i < _entries.size(); i++) {
+			_entries[i] = entryFactory.create();
+		}
+	};
 
 };
 
@@ -1194,6 +1257,31 @@ struct SingleThreaded : public ClaimStrategyOption {
      }
 }; // SingleThreaded
 
+/**
+ * No operation version of a {@link Consumer} that simply tracks a {@link RingBuffer}.
+ * This is useful in tests or for pre-filling a {@link RingBuffer} from a producer.
+ */
+template <class T>
+class NoOpConsumer : public Consumer {
+private:
+	const RingBuffer<T>& _ringBuffer;
+
+public:
+    /**
+     * Construct a {@link Consumer} that simply tracks a {@link RingBuffer}.
+     *
+     * @param ringBuffer to track.
+     */
+	NoOpConsumer(const RingBuffer<T>& ringBuffer)
+    		: _ringBuffer(ringBuffer)  {  }
+
+
+	virtual long getSequence() { return _ringBuffer.getCursor();  }
+
+    virtual void halt() {  }
+
+	virtual void run()  {  }
+}; // NoOpConsumer
 
 
 }; // namespace disruptor

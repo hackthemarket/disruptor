@@ -47,7 +47,7 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
-am_disruptor_OBJECTS = disruptor.$(OBJEXT)
+am_disruptor_OBJECTS = disruptor.$(OBJEXT) perf_tests.$(OBJEXT)
 disruptor_OBJECTS = $(am_disruptor_OBJECTS)
 disruptor_LDADD = $(LDADD)
 DEFAULT_INCLUDES = -I.@am__isrc@
@@ -159,7 +159,7 @@ target_vendor = @target_vendor@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-disruptor_SOURCES = disruptor.cpp
+disruptor_SOURCES = disruptor.cpp perf_tests.cpp
 INCLUDES = -I /home/tingarg/dev/tbb/include
 all: all-am
 
@@ -243,6 +243,7 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/disruptor.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/perf_tests.Po@am__quote@
 
 .cpp.o:
 @am__fastdepCXX_TRUE@	$(CXXCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
