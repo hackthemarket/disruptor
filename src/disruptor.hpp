@@ -9,6 +9,7 @@
 #define DISRUPTOR_HPP_
 
 #include <climits>
+//#include <assert.h>
 
 #include <tbb/atomic.h>
 #include <boost/thread/locks.hpp>
@@ -395,6 +396,28 @@ public:
      */
     virtual void onEndOfBatch();// throws Exception;
 };
+
+/**
+ * Used by the {@link BatchConsumer} to set a callback allowing the {@link BatchHandler} to notify
+ * when it has finished consuming an {@link AbstractEntry} if this happens after the {@link BatchHandler#onAvailable(AbstractEntry)} call.
+ * <p>
+ * Typically this would be used when the handler is performing some sort of batching operation such are writing to an IO device.
+ * </p>
+ * @param <T> AbstractEntry implementation storing the data for sharing during exchange or parallel coordination of an event.
+ */
+template <typename T>
+class SequenceTrackingHandler : public BatchHandler<T>
+{
+    /**
+     * Call by the {@link BatchConsumer} to setup the callback.
+     *
+     * @param sequenceTrackerCallback callback on which to notify the {@link BatchConsumer} that the sequence has progressed.
+     */
+    void setSequenceTrackerCallback(const BatchConsumer.SequenceTrackerCallback sequenceTrackerCallback);
+};
+
+
+
 
 /**
  * Callback handler for uncaught exceptions in the {@link AbstractEntry}
@@ -877,7 +900,7 @@ struct ClaimStrategyOption {
 template <typename T>
 class EntryFactory {
 public:
-    T create();
+    T* create();
 };
 
 
@@ -1284,8 +1307,191 @@ public:
 }; // NoOpConsumer
 
 
-}; // namespace disruptor
 
+/**
+ * Implement this interface to be notified when a thread for the {@link BatchConsumer} starts and shuts down.
+ */
+class LifecycleAware {
+public:
+	/**
+     * Called once on thread start before first entry is available.
+     */
+    virtual void onStart() = 0;
+
+    /**
+     * Called once just before the thread is shutdown.
+     */
+    virtual void onShutdown() = 0;
+}; // lifecycleaware
+
+
+
+
+//////////////////////// batch consumer
+
+/**
+ * Convenience class for handling the batching semantics of consuming entries from a {@link RingBuffer}
+ * and delegating the available {@link AbstractEntry}s to a {@link BatchHandler}.
+ *
+ * If the {@link BatchHandler} also implements {@link LifecycleAware} it will be notified just after the thread
+ * is started and just before the thread is shutdown.
+ *
+ * @param <T> Entry implementation storing the data for sharing during exchange or parallel coordination of an event.
+ */
+template <typename T>
+class BatchConsumer : public Consumer
+{
+private:
+
+	friend class SequenceTrackerCallback;
+	const ConsumerBarrier<T>& _consumerBarrier;
+    const BatchHandler<T>& 	_handler;
+    const ExceptionHandler* _exceptionHandler ;//= new FatalExceptionHandler();
+
+    long p1, p2, p3, p4, p5, p6, p7;  // cache line padding
+    volatile boolean _running = true;
+    long p8, p9, p10, p11, p12, p13, p14; // cache line padding
+    tbb::atomic<long> _sequence;// = RingBuffer.INITIAL_CURSOR_VALUE;
+	long p15, p16, p17, p18, p19, p20; // cache line padding
+
+public:
+    /**
+     * Construct a batch consumer that will automatically track the progress by updating its sequence when
+     * the {@link BatchHandler#onAvailable(AbstractEntry)} method returns.
+     *
+     * @param consumerBarrier on which it is waiting.
+     * @param handler is the delegate to which {@link AbstractEntry}s are dispatched.
+     */
+    BatchConsumer(const ConsumerBarrier<T>& consumerBarrier,
+                         const BatchHandler<T>& handler)
+    : _consumerBarrier(consumerBarrier), _handler(handler),
+      _exceptionHandler(new FatalExceptionHandler()),
+      _sequence(RingBuffer.INITIAL_CURSOR_VALUE)
+    { }
+
+    /**
+     * Construct a batch consumer that will rely on the {@link SequenceTrackingHandler}
+     * to callback via the {@link BatchConsumer.SequenceTrackerCallback} when it has
+     * completed with a sequence within a batch.  Sequence will be updated at the end of
+     * a batch regardless.
+     *
+     * @param consumerBarrier on which it is waiting.
+     * @param entryHandler is the delegate to which {@link AbstractEntry}s are dispatched.
+     */
+//    public BatchConsumer(final ConsumerBarrier<T> consumerBarrier,
+//                         final SequenceTrackingHandler<T> entryHandler)
+//    {
+//        this.consumerBarrier = consumerBarrier;
+//        this.handler = entryHandler;
+//
+//        entryHandler.setSequenceTrackerCallback(new SequenceTrackerCallback());
+//    }
+
+	long getSequence() const { return _sequence; }
+
+	void halt()
+    {
+        _running = false;
+        _consumerBarrier.alert();
+    }
+
+    /**
+     * Set a new {@link ExceptionHandler} for handling exceptions propagated out of the {@link BatchConsumer}
+     *
+     * @param exceptionHandler to replace the existing exceptionHandler.
+     */
+	void setExceptionHandler(const ExceptionHandler& exceptionHandler)
+    {
+        if (null == exceptionHandler)
+        {
+        	//throw new NullPointerException();
+        	std::cerr << "BatchHandler.setExceptionHandler: NULL!" << std::endl;
+        }
+        if (!_exceptionHandler) delete _exceptionHandler;
+        _exceptionHandler = exceptionHandler;
+    }
+
+    /**
+     * Get the {@link ConsumerBarrier} the {@link Consumer} is waiting on.
+     *
+      * @return the barrier this {@link Consumer} is using.
+     */
+    ConsumerBarrier<T>& getConsumerBarrier() const
+    	{ return consumerBarrier; }
+
+    /**
+     * It is ok to have another thread rerun this method after a halt().
+     */
+    void run()
+    {
+        _running = true;
+//        if (LifecycleAware.class.isAssignableFrom(handler.getClass()))
+//        {
+//            ((LifecycleAware)handler).onStart();
+//        }
+
+        T entry = null;
+        long nextSequence = sequence + 1 ;
+        while (_running)
+        {
+//            try
+//            {
+//                const long availableSequence = consumerBarrier.waitFor(nextSequence);
+//                for (; nextSequence <= availableSequence; nextSequence++)
+//                {
+//                    entry = consumerBarrier.getEntry(nextSequence);
+//                    handler.onAvailable(entry);
+//                }
+//
+//                handler.onEndOfBatch();
+//                sequence = entry.getSequence();
+//            }
+//            catch (final AlertException ex)
+//            {
+//                // Wake up from blocking wait and check if we should continue to run
+//            }
+//            catch (final Exception ex)
+//            {
+//                exceptionHandler.handle(ex, entry);
+//                sequence = entry.getSequence();
+//                nextSequence = entry.getSequence() + 1;
+//            }
+        }
+
+//        if (LifecycleAware.class.isAssignableFrom(handler.getClass()))
+//        {
+//            ((LifecycleAware)handler).onShutdown();
+//        }
+    }
+
+}; // batchconsumer
+/**
+ * Used by the {@link BatchHandler} to signal when it has completed consuming a given sequence.
+ */
+template <typename T>
+class SequenceTrackerCallback
+{
+private:
+	BatchConsumer<T>& _batchConsumer;
+
+public:
+
+	SequenceTrackerCallback(BatchConsumer<T>& batchConsumer)
+	: _batchConsumer(batchConsumer) {}
+
+    /**
+     * Notify that the handler has consumed up to a given sequence.
+     *
+     * @param sequence that has been consumed.
+     */
+    void onCompleted(const long sequence)  {
+    	_batchConsumer._sequence = sequence;
+    }
+}; // SequenceTrackerCallback
+
+//////////////////////// batch consumer
+
+}; // namespace disruptor
 
 
 #endif /* DISRUPTOR_HPP_ */

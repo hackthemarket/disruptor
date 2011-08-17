@@ -35,7 +35,7 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 target_triplet = @target@
-bin_PROGRAMS = disruptor$(EXEEXT)
+bin_PROGRAMS = perftests$(EXEEXT) disruptor$(EXEEXT)
 subdir = src
 DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
@@ -50,6 +50,9 @@ PROGRAMS = $(bin_PROGRAMS)
 am_disruptor_OBJECTS = disruptor.$(OBJEXT) perf_tests.$(OBJEXT)
 disruptor_OBJECTS = $(am_disruptor_OBJECTS)
 disruptor_LDADD = $(LDADD)
+am_perftests_OBJECTS = disruptor.$(OBJEXT) perf_tests.$(OBJEXT)
+perftests_OBJECTS = $(am_perftests_OBJECTS)
+perftests_LDADD = $(LDADD)
 DEFAULT_INCLUDES = -I.@am__isrc@
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
@@ -59,8 +62,8 @@ CXXCOMPILE = $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) \
 CXXLD = $(CXX)
 CXXLINK = $(CXXLD) $(AM_CXXFLAGS) $(CXXFLAGS) $(AM_LDFLAGS) $(LDFLAGS) \
 	-o $@
-SOURCES = $(disruptor_SOURCES)
-DIST_SOURCES = $(disruptor_SOURCES)
+SOURCES = $(disruptor_SOURCES) $(perftests_SOURCES)
+DIST_SOURCES = $(disruptor_SOURCES) $(perftests_SOURCES)
 ETAGS = etags
 CTAGS = ctags
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
@@ -160,6 +163,7 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 disruptor_SOURCES = disruptor.cpp perf_tests.cpp
+perftests_SOURCES = disruptor.cpp perf_tests.cpp
 INCLUDES = -I /home/tingarg/dev/tbb/include
 all: all-am
 
@@ -235,6 +239,9 @@ clean-binPROGRAMS:
 disruptor$(EXEEXT): $(disruptor_OBJECTS) $(disruptor_DEPENDENCIES) 
 	@rm -f disruptor$(EXEEXT)
 	$(CXXLINK) $(disruptor_OBJECTS) $(disruptor_LDADD) $(LIBS)
+perftests$(EXEEXT): $(perftests_OBJECTS) $(perftests_DEPENDENCIES) 
+	@rm -f perftests$(EXEEXT)
+	$(CXXLINK) $(perftests_OBJECTS) $(perftests_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
