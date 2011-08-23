@@ -109,7 +109,7 @@ public:
 	 * Get the sequence up to which this Consumer has consumed
 	 * {@link AbstractEntry}s
 	 */
-    virtual long getSequence() = 0;
+    virtual long getSequence() const = 0;
 
     /**
      * Signal that this Consumer should stop when it has finished consuming at
@@ -397,6 +397,8 @@ public:
     virtual void onEndOfBatch();// throws Exception;
 };
 
+template <typename T> class SequenceTrackerCallback; // fwd
+
 /**
  * Used by the {@link BatchConsumer} to set a callback allowing the {@link BatchHandler} to notify
  * when it has finished consuming an {@link AbstractEntry} if this happens after the {@link BatchHandler#onAvailable(AbstractEntry)} call.
@@ -413,7 +415,7 @@ class SequenceTrackingHandler : public BatchHandler<T>
      *
      * @param sequenceTrackerCallback callback on which to notify the {@link BatchConsumer} that the sequence has progressed.
      */
-    void setSequenceTrackerCallback(const BatchConsumer.SequenceTrackerCallback sequenceTrackerCallback);
+    void setSequenceTrackerCallback(const SequenceTrackerCallback<T> sequenceTrackerCallback);
 };
 
 
@@ -805,42 +807,37 @@ public:
 	void signalAll() {	}
 }; // BusySpinStrategy
 
-/**
- * Strategy options which are available to those waiting on a {@link RingBuffer}
- */
-struct WaitStrategyOption
-{
-/**
-  * Used by the {@link com.lmax.disruptor.RingBuffer} as a polymorphic
-  * constructor.
-  *
-  * @return a new instance of the WaitStrategy
-  */
-	virtual WaitStrategy* newInstance() = 0;
-};
-
-/** This strategy uses a condition variable inside a lock to block the
- * consumer which saves CPU resource as the expense of lock contention. */
-struct BlockingWait : public WaitStrategyOption {
-	virtual WaitStrategy* newInstance() { return new BlockingStrategy(); }
-};
-
-/** This strategy calls Thread.yield() in a loop as a waiting strategy which
- *  reduces contention at the expense of CPU resource. */
-struct YieldingWait : public WaitStrategyOption {
-	virtual WaitStrategy* newInstance() { return new YieldingStrategy(); }
-};
-
-/** This strategy call spins in a loop as a waiting strategy which is
- * lowest and most consistent latency but ties up a CPU */
-struct BusyWait : public WaitStrategyOption {
-	virtual WaitStrategy* newInstance() { return new BusySpinStrategy(); }
-};
-
-
-
-/// 			WaitStrategy
-////////////////////////////////////////////////////////////////////
+///**
+// * Strategy options which are available to those waiting on a {@link RingBuffer}
+// */
+//struct WaitStrategyOption
+//{
+///**
+//  * Used by the {@link com.lmax.disruptor.RingBuffer} as a polymorphic
+//  * constructor.
+//  *
+//  * @return a new instance of the WaitStrategy
+//  */
+//	virtual WaitStrategy* newInstance() const = 0;
+//};
+//
+///** This strategy uses a condition variable inside a lock to block the
+// * consumer which saves CPU resource as the expense of lock contention. */
+//struct BlockingWait : public WaitStrategyOption {
+//	virtual WaitStrategy* newInstance() const { return new BlockingStrategy(); }
+//};
+//
+///** This strategy calls Thread.yield() in a loop as a waiting strategy which
+// *  reduces contention at the expense of CPU resource. */
+//struct YieldingWait : public WaitStrategyOption {
+//	virtual WaitStrategy* newInstance() const { return new YieldingStrategy(); }
+//};
+//
+///** This strategy call spins in a loop as a waiting strategy which is
+// * lowest and most consistent latency but ties up a CPU */
+//struct BusyWait : public WaitStrategyOption {
+//	virtual WaitStrategy* newInstance() const { return new BusySpinStrategy(); }
+//};
 
 
 /**
@@ -880,31 +877,6 @@ public:
 }; // ClaimStrategy
 
 /**
- * Indicates the threading policy to be applied for claiming {@link
- * AbstractEntry}s by producers to the {@link RingBuffer}
- */
-struct ClaimStrategyOption {
-    /**
-     * Used by the {@link RingBuffer} as a polymorphic constructor.
-     *
-     * @return a new instance of the ClaimStrategy
-     */
-    virtual ClaimStrategy* newInstance() = 0;
-}; // Option
-
-/**
- * Called by the {@link RingBuffer} to pre-populate all the {@link AbstractEntry}s to fill the RingBuffer.
- *
- * @param <T> AbstractEntry implementation storing the data for sharing during exchange or parallel coordination of an event.
- */
-template <typename T>
-class EntryFactory {
-public:
-    T* create();
-};
-
-
-/**
  * ConsumerBarrier handed out for gating consumers of the RingBuffer and
  * dependent {@link Consumer}(s)
  */
@@ -912,41 +884,41 @@ template<typename T>
 class ConsumerTrackingConsumerBarrier: public ConsumerBarrier<T> {
 private:
 	tbb::atomic<bool> _alerted;
-	const RingBuffer<T>& _ring;
-  	const std::vector<Consumer*> _consumers;
+	const RingBuffer<T>* _ring;
+  	const std::vector<Consumer>* _consumers;
 public:
 
-	ConsumerTrackingConsumerBarrier(const std::vector<Consumer*> consumers,
-			const RingBuffer<T>& ring)
+	ConsumerTrackingConsumerBarrier(const RingBuffer<T>* ring,
+			const std::vector<Consumer>* consumers=NULL)
 	: _consumers(consumers), _ring(ring) {
 		_alerted = false;
 	}
 
 	T getEntry(const long sequence) {
-		return _ring._entries[(int) sequence & _ring._ringModMask];
+		return _ring->_entries[(int) sequence & _ring->_ringModMask];
 	}
 
 	long waitFor(const long sequence)
 	//    throws AlertException, InterruptedException
 	{
-		return	_ring._waitStrategy.waitFor
-				(_consumers, _ring, this, _ring._sequence);
+		return	_ring->_waitStrategy.waitFor
+				(_consumers, _ring, this, _ring->_sequence);
 	}
 
 	long waitFor(const long sequence, const boost::posix_time::time_duration timeout)
 	//  throws AlertException, InterruptedException
 	{
-		return _ring._waitStrategy.waitFor
+		return _ring->_waitStrategy.waitFor
 				(_consumers, _ring, this, sequence, timeout);
 	}
 
-	long getCursor() { return _ring._cursor; }
+	long getCursor() { return _ring->_cursor; }
 
 	bool isAlerted() {return _alerted;}
 
 	void alert() {
 		_alerted = true;
-		_ring._waitStrategy.signalAll();
+		_ring->_waitStrategy.signalAll();
 	}
 
 	void clearAlert() {_alerted = false;}
@@ -960,18 +932,18 @@ public:
 template <typename T>
 class ConsumerTrackingProducerBarrier : public ProducerBarrier<T> {
 private :
-	const std::vector<Consumer*> _consumers;
+	const std::vector<Consumer>* _consumers;
 	long _lastConsumerMinimum;
-	const RingBuffer<T>& _ring;
+	const RingBuffer<T>* _ring;
 
 public:
 
-	ConsumerTrackingProducerBarrier(const std::vector<Consumer*> consumers,
-			const RingBuffer<T>& ring)
+	ConsumerTrackingProducerBarrier(const RingBuffer<T>* ring,
+			const std::vector<Consumer>* consumers =NULL	)
 	: _consumers(consumers), _lastConsumerMinimum(INITIAL_CURSOR_VALUE),
 	  _ring(ring) {
 
-		if (0 == _consumers.size())
+		if (0 == _consumers->size())
 		{
 			//throw new IllegalArgumentException("There must be at least one Consumer to track for preventing ring wrap");
 			std::cerr << "There must be at least one Consumer to track for "
@@ -1109,9 +1081,10 @@ class RingBuffer {
 private:
 	volatile long _cursor;
 	const int _ringModMask;
-	const std::vector<AbstractEntry> _entries;
+	//std::vector<AbstractEntry> _entries;
+	std::vector<T> _entries;
 	const ClaimStrategy* _claimStrategy;
-	const ClaimStrategyOption* _claimStrategyOption;
+//	const ClaimStrategyOption* _claimStrategyOption;
 	const WaitStrategy* _waitStrategy;
 
 	friend class ConsumerTrackingConsumerBarrier<T>;
@@ -1130,19 +1103,36 @@ public:
 	 * @param claimStrategyOption threading strategy for producers claiming {@link AbstractEntry}s in the ring.
 	 * @param waitStrategyOption waiting strategy employed by consumers waiting on {@link AbstractEntry}s becoming available.
 	 */
-	RingBuffer(const EntryFactory<T> entryFactory, const int size,
-					  const ClaimStrategyOption* claimStrategyOption,
-					  const WaitStrategyOption* waitStrategyOption)
+	RingBuffer(const int size,
+			const ClaimStrategy* claimStrategy ,//= new MultiThreadedStrategy(),
+			const WaitStrategy* waitStrategy = new BlockingStrategy() )
 		: _cursor(INITIAL_CURSOR_VALUE) ,
 		  _ringModMask(ceilingNextPowerOfTwo(size)-1),
 		  _entries(_ringModMask+1),
-		  _claimStrategy(claimStrategyOption->newInstance()),
-		  _claimStrategyOption(claimStrategyOption),
-		  _waitStrategy(waitStrategyOption->newInstance())
+		  _claimStrategy(claimStrategy),
+		  _waitStrategy(waitStrategy)
 	{
 
-		fill(entryFactory);
+//		fill(entryFactory);
+//		for (int i = 0; i < _entries.size(); i++) {
+//			_entries[i] = entryFactory.create();
+//		}
+
 	}
+
+    /**
+     * Construct a RingBuffer with default strategies of:
+     * {@link ClaimStrategy.Option#MULTI_THREADED} and {@link WaitStrategy.Option#BLOCKING}
+     *
+     * @param entryFactory to create {@link AbstractEntry}s for filling the RingBuffer
+     * @param size of the RingBuffer that will be rounded up to the next power of 2
+     */
+//    RingBuffer(final EntryFactory<T> entryFactory, final int size) {
+//        this(entryFactory, size,
+//             ClaimStrategy.Option.MULTI_THREADED,
+//             WaitStrategy.Option.BLOCKING);
+//    }
+
 
 	/**
 	 * Create a {@link ConsumerBarrier} that gates on the RingBuffer and a list of
@@ -1151,9 +1141,9 @@ public:
 	 * @param consumersToTrack this barrier will track
 	 * @return the barrier gated as required
 	 */
-	ConsumerBarrier<T>
-	createConsumerBarrier(const std::vector<Consumer> consumersToTrack) {
-		return new ConsumerTrackingConsumerBarrier<T>(consumersToTrack, this);
+	ConsumerBarrier<T>*
+	createConsumerBarrier(const std::vector<Consumer>* consumersToTrack = NULL) const {
+		return new ConsumerTrackingConsumerBarrier<T>(this, consumersToTrack);
 	}
 
 	/**
@@ -1163,10 +1153,10 @@ public:
 	 * @param consumersToTrack to be tracked to prevent wrapping.
 	 * @return a {@link ProducerBarrier} with the above configuration.
 	 */
-	 ProducerBarrier<T> createProducerBarrier
-	 	 (const std::vector<Consumer> consumersToTrack)
+	 ProducerBarrier<T>* createProducerBarrier
+	 	 (const std::vector<Consumer>* consumersToTrack = NULL) const
 	 {
-		return new ConsumerTrackingProducerBarrier<T>(consumersToTrack, this);
+		return new ConsumerTrackingProducerBarrier<T>(this, consumersToTrack);
 	 }
 
 	/**
@@ -1206,15 +1196,7 @@ public:
 		return _entries[(int) sequence & _ringModMask];
 	}
 
-private:
-
-	void fill(const EntryFactory<T> entryFactory) {
-		for (int i = 0; i < _entries.size(); i++) {
-			_entries[i] = entryFactory.create();
-		}
-	};
-
-};
+};// RingBuffer
 
 /**
  * Strategy to be used when there are multiple producer threads
@@ -1264,21 +1246,21 @@ public:
     virtual void setSequence(const long seq) { _sequence = seq; }
 }; // SingleThreadedStrategy
 
-/** Makes the {@link RingBuffer} thread safe for claiming
- * {@link AbstractEntry}s by multiple producing threads. */
-struct MultiThreaded : public ClaimStrategyOption {
-	virtual ClaimStrategy* newInstance() {
-		return new MultiThreadedStrategy();
-     }
-}; // MultiThreaded
-
-/** Optimised {@link RingBuffer} for use by single thread
- * claiming {@link AbstractEntry}s as a producer. */
-struct SingleThreaded : public ClaimStrategyOption {
-	virtual ClaimStrategy* newInstance() {
-        return new SingleThreadedStrategy();
-     }
-}; // SingleThreaded
+///** Makes the {@link RingBuffer} thread safe for claiming
+// * {@link AbstractEntry}s by multiple producing threads. */
+//struct MultiThreaded : public ClaimStrategyOption {
+//	virtual ClaimStrategy* newInstance() const {
+//		return new MultiThreadedStrategy();
+//     }
+//}; // MultiThreaded
+//
+///** Optimised {@link RingBuffer} for use by single thread
+// * claiming {@link AbstractEntry}s as a producer. */
+//struct SingleThreaded : public ClaimStrategyOption {
+//	virtual ClaimStrategy* newInstance() const {
+//        return new SingleThreadedStrategy();
+//     }
+//}; // SingleThreaded
 
 /**
  * No operation version of a {@link Consumer} that simply tracks a {@link RingBuffer}.
@@ -1343,13 +1325,14 @@ class BatchConsumer : public Consumer
 {
 private:
 
-	friend class SequenceTrackerCallback;
-	const ConsumerBarrier<T>& _consumerBarrier;
-    const BatchHandler<T>& 	_handler;
+	friend class SequenceTrackerCallback<T>;
+
+	const ConsumerBarrier<T>* _consumerBarrier;
+    const BatchHandler<T>* 	_handler;
     const ExceptionHandler* _exceptionHandler ;//= new FatalExceptionHandler();
 
     long p1, p2, p3, p4, p5, p6, p7;  // cache line padding
-    volatile boolean _running = true;
+    tbb::atomic<bool> _running;
     long p8, p9, p10, p11, p12, p13, p14; // cache line padding
     tbb::atomic<long> _sequence;// = RingBuffer.INITIAL_CURSOR_VALUE;
 	long p15, p16, p17, p18, p19, p20; // cache line padding
@@ -1362,12 +1345,14 @@ public:
      * @param consumerBarrier on which it is waiting.
      * @param handler is the delegate to which {@link AbstractEntry}s are dispatched.
      */
-    BatchConsumer(const ConsumerBarrier<T>& consumerBarrier,
-                         const BatchHandler<T>& handler)
+    BatchConsumer(const ConsumerBarrier<T>* consumerBarrier,
+                         const BatchHandler<T>* handler)
     : _consumerBarrier(consumerBarrier), _handler(handler),
-      _exceptionHandler(new FatalExceptionHandler()),
-      _sequence(RingBuffer.INITIAL_CURSOR_VALUE)
-    { }
+      _exceptionHandler(new FatalExceptionHandler())
+    {
+    	_sequence = INITIAL_CURSOR_VALUE;
+    	_running = true;
+    }
 
     /**
      * Construct a batch consumer that will rely on the {@link SequenceTrackingHandler}
@@ -1387,9 +1372,9 @@ public:
 //        entryHandler.setSequenceTrackerCallback(new SequenceTrackerCallback());
 //    }
 
-	long getSequence() const { return _sequence; }
+	virtual long getSequence() const { return _sequence; }
 
-	void halt()
+	virtual void halt()
     {
         _running = false;
         _consumerBarrier.alert();
@@ -1400,9 +1385,9 @@ public:
      *
      * @param exceptionHandler to replace the existing exceptionHandler.
      */
-	void setExceptionHandler(const ExceptionHandler& exceptionHandler)
+	void setExceptionHandler(const ExceptionHandler* exceptionHandler)
     {
-        if (null == exceptionHandler)
+        if (!exceptionHandler)
         {
         	//throw new NullPointerException();
         	std::cerr << "BatchHandler.setExceptionHandler: NULL!" << std::endl;
@@ -1417,12 +1402,12 @@ public:
       * @return the barrier this {@link Consumer} is using.
      */
     ConsumerBarrier<T>& getConsumerBarrier() const
-    	{ return consumerBarrier; }
+    	{ return _consumerBarrier; }
 
     /**
      * It is ok to have another thread rerun this method after a halt().
      */
-    void run()
+    virtual void run()
     {
         _running = true;
 //        if (LifecycleAware.class.isAssignableFrom(handler.getClass()))
@@ -1430,8 +1415,8 @@ public:
 //            ((LifecycleAware)handler).onStart();
 //        }
 
-        T entry = null;
-        long nextSequence = sequence + 1 ;
+        T entry ;
+        long nextSequence = ++_sequence ;
         while (_running)
         {
 //            try

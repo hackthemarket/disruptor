@@ -8,8 +8,8 @@
 #include "perf_tests.hpp"
 
 
-
-void main(char** args) {
+int
+main(int argc, char* argv[] ) {
 
 	UniCast1P1CPerfTest test();
 	test.shouldCompareDisruptorVsQueues();
