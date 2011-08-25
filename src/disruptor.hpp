@@ -258,13 +258,11 @@ class ConsumerBarrier {
 //public interface ConsumerBarrier<T extends AbstractEntry>
 public:
 
-	virtual ~ConsumerBarrier() {}
-
     /**
      * Get the {@link AbstractEntry} for a given sequence from the
      * underlying {@link RingBuffer}.
      */
-    virtual T getEntry(long sequence);
+    virtual T getEntry(const long sequence) = 0;
 
     /**
      * Wait for the given sequence to be available for consumption.
@@ -276,7 +274,7 @@ public:
      * @throws InterruptedException if the thread needs awaking on
      * a condition variable.
      */
-    virtual long waitFor(long sequence) ;
+    virtual long waitFor(const long sequence) = 0;
     //throws AlertException, InterruptedException;
 
     /**
@@ -292,33 +290,33 @@ public:
      * @throws InterruptedException if the thread needs awaking
      *  on a condition variable.
      */
-    virtual long waitFor(long sequence,
-    		boost::posix_time::time_duration timeout) ;
+    virtual long waitFor(const long sequence,
+    		const boost::posix_time::time_duration timeout) = 0;
     //throws AlertException, InterruptedException;
 
     /**
      * Delegate a call to the {@link RingBuffer#getCursor()}
      * @return value of the cursor for entries that have been published.
      */
-    virtual long getCursor();
+    virtual long getCursor() = 0;
 
     /**
      * The current alert status for the barrier.
      *
      * @return true if in alert otherwise false.
      */
-    virtual bool isAlerted();
+    virtual bool isAlerted() = 0;
 
     /**
      * Alert the consumers of a status change and stay in this status
      *  until cleared.
      */
-    virtual void alert();
+    virtual void alert() = 0;
 
     /**
      * Clear the current alert status.
      */
-    virtual void clearAlert();
+    virtual void clearAlert() = 0;
 
 };
 /**
@@ -371,8 +369,6 @@ class BatchHandler {
 //public interface BatchHandler<T extends AbstractEntry>
 public:
 
-	virtual ~BatchHandler() {}
-
     /**
      * Called when a publisher has committed an {@link AbstractEntry} to
      * the {@link RingBuffer}
@@ -381,7 +377,7 @@ public:
      * @throws Exception if the BatchHandler would like the exception handled
      * further up the chain.
      */
-    virtual void onAvailable(T entry) ; //throws Exception;
+    virtual void onAvailable(T entry) = 0; //throws Exception;
 
     /**
      * Called after each batch of items has been have been processed before
@@ -394,7 +390,7 @@ public:
      * @throws Exception if the BatchHandler would like the exception handled
      * further up the chain.
      */
-    virtual void onEndOfBatch();// throws Exception;
+    virtual void onEndOfBatch() = 0;// throws Exception;
 };
 
 template <typename T> class SequenceTrackerCallback; // fwd
@@ -525,7 +521,7 @@ public:
     /**
      * Signal those waiting that the {@link RingBuffer} cursor has advanced.
      */
-    virtual void signalAll();
+    virtual void signalAll() = 0;
 }; // WaitStrategy
 
 
@@ -536,7 +532,7 @@ public:
  * This strategy should be used when performance and low-latency are not
  *  as important as CPU resource.
  */
-class BlockingStrategy : public WaitStrategy {
+class BlockingWait : public WaitStrategy {
 private:
 
 	const boost::shared_mutex _mutex;
@@ -634,12 +630,12 @@ public:
  *
  * This strategy is a good compromise between performance and CPU resource.
  */
-class YieldingStrategy: public WaitStrategy {
+class YieldingWait: public WaitStrategy {
 public:
 
 	template<typename T>
-	long waitFor(std::vector<Consumer*> consumers, RingBuffer<T> ringBuffer,
-			ConsumerBarrier<T> barrier, long sequence) {
+	long waitFor(std::vector<Consumer*> consumers, RingBuffer<T>* ringBuffer,
+    		ConsumerBarrier<T>* barrier,  long sequence) {
 		long availableSequence;
 
 		if (0 == consumers.size()) {
@@ -722,7 +718,7 @@ public:
  *  latency jitter.  It is best
  * used when threads can be bound to specific CPU cores.
  */
-class BusySpinStrategy: public WaitStrategy {
+class BusySpinWait: public WaitStrategy {
 
 public:
 
@@ -895,34 +891,34 @@ public:
 		_alerted = false;
 	}
 
-	T getEntry(const long sequence) {
+	virtual T getEntry(const long sequence) {
 		return _ring->_entries[(int) sequence & _ring->_ringModMask];
 	}
 
-	long waitFor(const long sequence)
+	virtual long waitFor(const long sequence)
 	//    throws AlertException, InterruptedException
 	{
 		return	_ring->_waitStrategy->waitFor
 				(_consumers, _ring, this, sequence);
 	}
 
-	long waitFor(const long sequence, const boost::posix_time::time_duration timeout)
+	virtual long waitFor(const long sequence, const boost::posix_time::time_duration timeout)
 	//  throws AlertException, InterruptedException
 	{
 		return _ring->_waitStrategy->waitFor
 				(_consumers, _ring, this, sequence, timeout);
 	}
 
-	long getCursor() { return _ring->_cursor; }
+	virtual long getCursor() { return _ring->_cursor; }
 
-	bool isAlerted() {return _alerted;}
+	virtual bool isAlerted() {return _alerted;}
 
-	void alert() {
+	virtual void alert() {
 		_alerted = true;
 		_ring->_waitStrategy->signalAll();
 	}
 
-	void clearAlert() {_alerted = false;}
+	virtual void clearAlert() {_alerted = false;}
 }; // ConsumerTrackingConsumerBarrier
 
 /**
@@ -1106,7 +1102,7 @@ public:
 	 */
 	RingBuffer(const int size,
 			ClaimStrategy* claimStrategy ,//= new MultiThreadedStrategy(),
-			WaitStrategy* waitStrategy = new BlockingStrategy() )
+			WaitStrategy* waitStrategy = new BlockingWait() )
 		: _cursor(INITIAL_CURSOR_VALUE) ,
 		  _ringModMask(ceilingNextPowerOfTwo(size)-1),
 		  _entries(_ringModMask+1),
