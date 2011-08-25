@@ -7,11 +7,14 @@
 
 #include "perf_tests.hpp"
 
+using namespace disruptor;
 
 int
 main(int argc, char* argv[] ) {
 
-	UniCast1P1CPerfTest test();
+	std::vector<Consumer*> consumers;
+	UniCast1P1CPerfTest test(consumers);
 	test.shouldCompareDisruptorVsQueues();
 
+	return EXIT_SUCCESS;
 }

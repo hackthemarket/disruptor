@@ -35,7 +35,7 @@ POST_UNINSTALL = :
 build_triplet = x86_64-unknown-linux-gnu
 host_triplet = x86_64-unknown-linux-gnu
 target_triplet = x86_64-unknown-linux-gnu
-bin_PROGRAMS = perftests$(EXEEXT) disruptor$(EXEEXT)
+bin_PROGRAMS = perftests$(EXEEXT)
 subdir = src
 DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
@@ -47,10 +47,7 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
-am_disruptor_OBJECTS = disruptor.$(OBJEXT) perf_tests.$(OBJEXT)
-disruptor_OBJECTS = $(am_disruptor_OBJECTS)
-disruptor_LDADD = $(LDADD)
-am_perftests_OBJECTS = disruptor.$(OBJEXT) perf_tests.$(OBJEXT)
+am_perftests_OBJECTS = perf_tests.$(OBJEXT)
 perftests_OBJECTS = $(am_perftests_OBJECTS)
 perftests_LDADD = $(LDADD)
 DEFAULT_INCLUDES = -I.
@@ -62,8 +59,8 @@ CXXCOMPILE = $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) \
 CXXLD = $(CXX)
 CXXLINK = $(CXXLD) $(AM_CXXFLAGS) $(CXXFLAGS) $(AM_LDFLAGS) $(LDFLAGS) \
 	-o $@
-SOURCES = $(disruptor_SOURCES) $(perftests_SOURCES)
-DIST_SOURCES = $(disruptor_SOURCES) $(perftests_SOURCES)
+SOURCES = $(perftests_SOURCES)
+DIST_SOURCES = $(perftests_SOURCES)
 ETAGS = etags
 CTAGS = ctags
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
@@ -162,8 +159,7 @@ target_vendor = unknown
 top_build_prefix = ../
 top_builddir = ..
 top_srcdir = ..
-disruptor_SOURCES = disruptor.cpp perf_tests.cpp
-perftests_SOURCES = disruptor.cpp perf_tests.cpp
+perftests_SOURCES = perf_tests.cpp
 INCLUDES = -I /home/tingarg/dev/tbb/include
 all: all-am
 
@@ -236,9 +232,6 @@ uninstall-binPROGRAMS:
 
 clean-binPROGRAMS:
 	-test -z "$(bin_PROGRAMS)" || rm -f $(bin_PROGRAMS)
-disruptor$(EXEEXT): $(disruptor_OBJECTS) $(disruptor_DEPENDENCIES) 
-	@rm -f disruptor$(EXEEXT)
-	$(CXXLINK) $(disruptor_OBJECTS) $(disruptor_LDADD) $(LIBS)
 perftests$(EXEEXT): $(perftests_OBJECTS) $(perftests_DEPENDENCIES) 
 	@rm -f perftests$(EXEEXT)
 	$(CXXLINK) $(perftests_OBJECTS) $(perftests_LDADD) $(LIBS)
@@ -249,7 +242,6 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-include ./$(DEPDIR)/disruptor.Po
 include ./$(DEPDIR)/perf_tests.Po
 
 .cpp.o:

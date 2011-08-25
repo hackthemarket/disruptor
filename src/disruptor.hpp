@@ -133,7 +133,7 @@ inline long getMinimumSequence(const std::vector<Consumer*> consumers) {
     long minimum = LONG_MAX;
 
     for (int i = 0; i < consumers.size(); i++) {
-   	 Consumer* consumer = consumers.at(i);
+   	 Consumer *consumer = consumers.at(i);
         long sequence = consumer->getSequence();
         minimum = minimum < sequence ? minimum : sequence;
     }
@@ -483,6 +483,7 @@ template <class T> class RingBuffer; // fwd
  * Strategy employed for making {@link Consumer}s wait on a {@link RingBuffer}.
  */
 class WaitStrategy {
+public:
     /**
      * Wait for the given sequence to be available for consumption
      * in a {@link RingBuffer}
@@ -497,8 +498,8 @@ class WaitStrategy {
      * @throws InterruptedException if the thread is interrupted.
      */
 	template <typename T>
-	long waitFor(std::vector<Consumer*> consumers, RingBuffer<T> ringBuffer,
-    		ConsumerBarrier<T> barrier,  long sequence) {};
+	long waitFor(std::vector<Consumer*> consumers, RingBuffer<T>* ringBuffer,
+    		ConsumerBarrier<T>* barrier,  long sequence) {};
 //        throws AlertException, InterruptedException;
 
     /**
@@ -517,7 +518,7 @@ class WaitStrategy {
      */
 	template <typename T>
     long waitFor(std::vector<Consumer*> consumers,
-    		RingBuffer<T> ringBuffer, ConsumerBarrier<T> barrier, long sequence,
+    		RingBuffer<T>* ringBuffer, ConsumerBarrier<T>* barrier, long sequence,
     		boost::posix_time::time_duration timeout) {};
         //throws AlertException, InterruptedException;
 
@@ -884,12 +885,12 @@ template<typename T>
 class ConsumerTrackingConsumerBarrier: public ConsumerBarrier<T> {
 private:
 	tbb::atomic<bool> _alerted;
-	const RingBuffer<T>* _ring;
-  	const std::vector<Consumer>* _consumers;
+	RingBuffer<T>* _ring;
+  	std::vector<Consumer*> _consumers;
 public:
 
-	ConsumerTrackingConsumerBarrier(const RingBuffer<T>* ring,
-			const std::vector<Consumer>* consumers=NULL)
+	ConsumerTrackingConsumerBarrier(RingBuffer<T>* ring,
+			std::vector<Consumer*> consumers)
 	: _consumers(consumers), _ring(ring) {
 		_alerted = false;
 	}
@@ -901,14 +902,14 @@ public:
 	long waitFor(const long sequence)
 	//    throws AlertException, InterruptedException
 	{
-		return	_ring->_waitStrategy.waitFor
-				(_consumers, _ring, this, _ring->_sequence);
+		return	_ring->_waitStrategy->waitFor
+				(_consumers, _ring, this, sequence);
 	}
 
 	long waitFor(const long sequence, const boost::posix_time::time_duration timeout)
 	//  throws AlertException, InterruptedException
 	{
-		return _ring->_waitStrategy.waitFor
+		return _ring->_waitStrategy->waitFor
 				(_consumers, _ring, this, sequence, timeout);
 	}
 
@@ -918,7 +919,7 @@ public:
 
 	void alert() {
 		_alerted = true;
-		_ring->_waitStrategy.signalAll();
+		_ring->_waitStrategy->signalAll();
 	}
 
 	void clearAlert() {_alerted = false;}
@@ -932,18 +933,18 @@ public:
 template <typename T>
 class ConsumerTrackingProducerBarrier : public ProducerBarrier<T> {
 private :
-	const std::vector<Consumer>* _consumers;
+	std::vector<Consumer*> _consumers;
 	long _lastConsumerMinimum;
-	const RingBuffer<T>* _ring;
+	RingBuffer<T>* _ring;
 
 public:
 
-	ConsumerTrackingProducerBarrier(const RingBuffer<T>* ring,
-			const std::vector<Consumer>* consumers =NULL	)
+	ConsumerTrackingProducerBarrier(RingBuffer<T>* ring,
+			std::vector<Consumer*> consumers )
 	: _consumers(consumers), _lastConsumerMinimum(INITIAL_CURSOR_VALUE),
 	  _ring(ring) {
 
-		if (0 == _consumers->size())
+		if (0 == _consumers.size())
 		{
 			//throw new IllegalArgumentException("There must be at least one Consumer to track for preventing ring wrap");
 			std::cerr << "There must be at least one Consumer to track for "
@@ -952,46 +953,46 @@ public:
 	}
 
 	T nextEntry() {
-		const long sequence = _ring._claimStrategy.incrementAndGet();
+		const long sequence = _ring->_claimStrategy->incrementAndGet();
 		ensureConsumersAreInRange(sequence);
 
-		AbstractEntry entry = _ring.entries[(int)sequence & _ring.ringModMask];
+		T entry = _ring->entries()[(int)sequence & _ring->ringModMask()];
 		entry.setSequence(sequence);
 
-		return (T)entry;
+		return entry;
 	}
 
 	void commit(const T entry)	{ commit(entry.getSequence(), 1); }
 
-	SequenceBatch nextEntries(const SequenceBatch sequenceBatch) {
-		const long sequence = _ring._claimStrategy
-				.incrementAndGet(sequenceBatch.getSize());
+	SequenceBatch nextEntries(SequenceBatch sequenceBatch) {
+		const long sequence = _ring->_claimStrategy->
+				incrementAndGet(sequenceBatch.getSize());
 		sequenceBatch.setEnd(sequence);
 		ensureConsumersAreInRange(sequence);
 
 		for (long i = sequenceBatch.getStart(), _end = sequenceBatch.getEnd(); i <= _end; i++)
 		{
-			AbstractEntry entry = _ring._entries[(int)i & _ring._ringModMask];
+			T entry = _ring->_entries[(int)i & _ring->ringModMask()];
 			entry.setSequence(i);
 		}
 
 		return sequenceBatch;
 	}
 
-	void commit(const SequenceBatch sequenceBatch)
+	void commit(SequenceBatch sequenceBatch)
 	{
 		commit(sequenceBatch.getEnd(), sequenceBatch.getSize());
 	}
 
 	T getEntry(const long sequence)	{
-		return _ring._entries[(int) sequence & _ring._ringModMask];
+		return _ring->_entries[(int) sequence & _ring->ringModMask()];
 	}
 
-	long getCursor() { return _ring._cursor;	}
+	long getCursor() { return _ring->getCursor();	}
 
 	void ensureConsumersAreInRange(const long sequence)
 	{
-		const long wrapPoint = sequence - _ring._entries.length;
+		const long wrapPoint = sequence - _ring->entries().size();
 		while (wrapPoint > _lastConsumerMinimum &&
 				wrapPoint > (_lastConsumerMinimum = getMinimumSequence(_consumers)))
 		{
@@ -1083,9 +1084,9 @@ private:
 	const int _ringModMask;
 	//std::vector<AbstractEntry> _entries;
 	std::vector<T> _entries;
-	const ClaimStrategy* _claimStrategy;
+	ClaimStrategy* _claimStrategy;
 //	const ClaimStrategyOption* _claimStrategyOption;
-	const WaitStrategy* _waitStrategy;
+	WaitStrategy* _waitStrategy;
 
 	friend class ConsumerTrackingConsumerBarrier<T>;
 	friend class ConsumerTrackingProducerBarrier<T>;
@@ -1104,8 +1105,8 @@ public:
 	 * @param waitStrategyOption waiting strategy employed by consumers waiting on {@link AbstractEntry}s becoming available.
 	 */
 	RingBuffer(const int size,
-			const ClaimStrategy* claimStrategy ,//= new MultiThreadedStrategy(),
-			const WaitStrategy* waitStrategy = new BlockingStrategy() )
+			ClaimStrategy* claimStrategy ,//= new MultiThreadedStrategy(),
+			WaitStrategy* waitStrategy = new BlockingStrategy() )
 		: _cursor(INITIAL_CURSOR_VALUE) ,
 		  _ringModMask(ceilingNextPowerOfTwo(size)-1),
 		  _entries(_ringModMask+1),
@@ -1133,6 +1134,10 @@ public:
 //             WaitStrategy.Option.BLOCKING);
 //    }
 
+	int ringModMask() { return _ringModMask; }
+
+	std::vector<T>& entries() { return _entries; }
+
 
 	/**
 	 * Create a {@link ConsumerBarrier} that gates on the RingBuffer and a list of
@@ -1142,7 +1147,7 @@ public:
 	 * @return the barrier gated as required
 	 */
 	ConsumerBarrier<T>*
-	createConsumerBarrier(const std::vector<Consumer>* consumersToTrack = NULL) const {
+	createConsumerBarrier(std::vector<Consumer*> consumersToTrack)  {
 		return new ConsumerTrackingConsumerBarrier<T>(this, consumersToTrack);
 	}
 
@@ -1154,9 +1159,9 @@ public:
 	 * @return a {@link ProducerBarrier} with the above configuration.
 	 */
 	 ProducerBarrier<T>* createProducerBarrier
-	 	 (const std::vector<Consumer>* consumersToTrack = NULL) const
+	 	 (std::vector<Consumer*> consumersToTrack ) const
 	 {
-		return new ConsumerTrackingProducerBarrier<T>(this, consumersToTrack);
+		return new ConsumerTrackingProducerBarrier<T>(const_cast<RingBuffer<T>* >(this), consumersToTrack);
 	 }
 
 	/**
@@ -1327,9 +1332,9 @@ private:
 
 	friend class SequenceTrackerCallback<T>;
 
-	const ConsumerBarrier<T>* _consumerBarrier;
-    const BatchHandler<T>* 	_handler;
-    const ExceptionHandler* _exceptionHandler ;//= new FatalExceptionHandler();
+	ConsumerBarrier<T>* _consumerBarrier;
+    BatchHandler<T>* 	_handler;
+    ExceptionHandler* _exceptionHandler ;//= new FatalExceptionHandler();
 
     long p1, p2, p3, p4, p5, p6, p7;  // cache line padding
     tbb::atomic<bool> _running;
@@ -1345,8 +1350,8 @@ public:
      * @param consumerBarrier on which it is waiting.
      * @param handler is the delegate to which {@link AbstractEntry}s are dispatched.
      */
-    BatchConsumer(const ConsumerBarrier<T>* consumerBarrier,
-                         const BatchHandler<T>* handler)
+    BatchConsumer(ConsumerBarrier<T>* consumerBarrier,
+                     BatchHandler<T>* handler)
     : _consumerBarrier(consumerBarrier), _handler(handler),
       _exceptionHandler(new FatalExceptionHandler())
     {
@@ -1377,7 +1382,7 @@ public:
 	virtual void halt()
     {
         _running = false;
-        _consumerBarrier.alert();
+        _consumerBarrier->alert();
     }
 
     /**
