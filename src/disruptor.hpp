@@ -8,9 +8,6 @@
 #ifndef DISRUPTOR_HPP_
 #define DISRUPTOR_HPP_
 
-#include <climits>
-//#include <assert.h>
-
 #include <tbb/atomic.h>
 #include <boost/thread/locks.hpp>
 #include <boost/thread/mutex.hpp>
@@ -73,31 +70,22 @@ private:
 
 public:
 
-    virtual ~AbstractEntry() {}
-
     /**Get the sequence number assigned to this item in the series.    */
-    virtual long getSequence () const { return _sequence; }
+    long getSequence () const { return _sequence; }
 
     /**
 	 * Explicitly set the sequence number for this Entry and a CommitCallback
 	 * for indicating when the producer is finished with assigning data
 	 * for exchange.     */
-    virtual void setSequence(const long sequence) { _sequence = sequence; }
+    void setSequence(const long sequence) { _sequence = sequence; }
 
-    std::string toString() const {
-    	std::string str ("AbstractEntry#");
-    	str += _sequence;
-    	return str;
-    }
-
-}; // class AbstractEntry
+}; // AbstractEntry
 
 
-inline std::ostream& operator<<(std::ostream& os, AbstractEntry& entry) {
-	os << entry.toString();
+inline std::ostream& operator<<(std::ostream& os, const AbstractEntry& entry) {
+	os << "AbstractEntry#" << entry.getSequence();
 	return os;
 }
-
 
 /**
  * EntryConsumers waitFor {@link AbstractEntry}s to become available for
@@ -121,7 +109,7 @@ public:
     // Runnable...
     virtual void run() = 0;
 
-}; // class consumer
+}; // consumer
 
 /**
  * Get the minimum sequence from an array of {@link Consumer}s.
@@ -131,13 +119,11 @@ public:
  */
 inline long getMinimumSequence(const std::vector<Consumer*> consumers) {
     long minimum = LONG_MAX;
-
-    for (int i = 0; i < consumers.size(); i++) {
-   	 Consumer *consumer = consumers.at(i);
-        long sequence = consumer->getSequence();
-        minimum = minimum < sequence ? minimum : sequence;
+    for (std::vector<Consumer*>::const_iterator it = consumers.begin();
+    			it!=consumers.end(); ++it) {
+    	const Consumer *consumer = *it;
+    	minimum = std::min(minimum, consumer->getSequence());
     }
-
     return minimum;
 }
 
@@ -163,7 +149,7 @@ public:
      *
      * @return the end sequence in a batch
      */
-    long getEnd() { return _end; }
+    long getEnd() const { return _end; }
 
     /**
      * Set the end of the batch sequence.  To be used by
@@ -178,16 +164,15 @@ public:
      *
      * @return the size of the batch.
      */
-    int getSize() { return _size; }
+    int getSize() const { return _size; }
 
     /**
      * Get the starting sequence for a batch.
      *
      * @return the starting sequence of a batch.
      */
-    long getStart() { return _end - (_size - 1L); }
+    long getStart() const { return _end - (_size - 1L); }
 };
-
 
 /**
  * Abstraction for claiming {@link AbstractEntry}s in a {@link RingBuffer}
@@ -244,7 +229,7 @@ public:
      * @return value of the cursor for entries that have been published.
      */
     virtual long getCursor() = 0;
-};
+}; // ProducerBarrier
 
 /**
  * Coordination barrier for tracking the cursor for producers and sequence of
@@ -255,7 +240,6 @@ public:
  */
 template < typename T >
 class ConsumerBarrier {
-//public interface ConsumerBarrier<T extends AbstractEntry>
 public:
 
     /**
@@ -318,7 +302,8 @@ public:
      */
     virtual void clearAlert() = 0;
 
-};
+}; // ConsumerBarrier
+
 /**
  * Abstraction for claiming {@link AbstractEntry}s in a {@link RingBuffer} while tracking dependent {@link Consumer}s.
  *
@@ -366,7 +351,6 @@ public:
  */
 template <typename T>
 class BatchHandler {
-//public interface BatchHandler<T extends AbstractEntry>
 public:
 
     /**
@@ -436,7 +420,6 @@ public:
      * @param currentEntry being processed when the exception occurred.
      */
 	virtual void handle(const void * ex, const AbstractEntry& currentEntry) = 0;
-	//    void handle(Exception ex, AbstractEntry currentEntry);
 
 };
 
@@ -449,31 +432,21 @@ public:
 class FatalExceptionHandler : public ExceptionHandler {
 
 public:
-//    private const static Logger LOGGER = Logger.getLogger
-	//(FatalExceptionHandler.class.getName());
-//    private const Logger logger;
-
-    FatalExceptionHandler() { }
 
     virtual void handle(const void * ex, const AbstractEntry& currentEntry) {
         //logger.log(Level.SEVERE, "Exception processing: " + currentEntry, ex);
 
     	std::cerr << "Exception processing "
-    			<< currentEntry.toString() << std::endl;
-
+    			<< currentEntry << std::endl;
+//todo - exceptions
 //        throw new RuntimeException(ex);
     }
 };
 
-//class WaitStrategy;//fwd
-//class WaitStrategyOption;//fwd
 class ClaimStrategy; // fwd
 class ClaimStrategyOption; //fwd
 
 template <class T> class RingBuffer; // fwd
-
-////////////////////////////////////////////////////////////////////
-/// 			WaitStrategy
 
 /**
  * Strategy employed for making {@link Consumer}s wait on a {@link RingBuffer}.
@@ -804,39 +777,6 @@ public:
 	void signalAll() {	}
 }; // BusySpinStrategy
 
-///**
-// * Strategy options which are available to those waiting on a {@link RingBuffer}
-// */
-//struct WaitStrategyOption
-//{
-///**
-//  * Used by the {@link com.lmax.disruptor.RingBuffer} as a polymorphic
-//  * constructor.
-//  *
-//  * @return a new instance of the WaitStrategy
-//  */
-//	virtual WaitStrategy* newInstance() const = 0;
-//};
-//
-///** This strategy uses a condition variable inside a lock to block the
-// * consumer which saves CPU resource as the expense of lock contention. */
-//struct BlockingWait : public WaitStrategyOption {
-//	virtual WaitStrategy* newInstance() const { return new BlockingStrategy(); }
-//};
-//
-///** This strategy calls Thread.yield() in a loop as a waiting strategy which
-// *  reduces contention at the expense of CPU resource. */
-//struct YieldingWait : public WaitStrategyOption {
-//	virtual WaitStrategy* newInstance() const { return new YieldingStrategy(); }
-//};
-//
-///** This strategy call spins in a loop as a waiting strategy which is
-// * lowest and most consistent latency but ties up a CPU */
-//struct BusyWait : public WaitStrategyOption {
-//	virtual WaitStrategy* newInstance() const { return new BusySpinStrategy(); }
-//};
-
-
 /**
  * Strategies employed for claiming the sequence of {@link AbstractEntry}s in
  * the {@link RingBuffer} by producers.
@@ -869,7 +809,6 @@ public:
      * @param sequence to be set as the current value.
      */
     virtual void setSequence(long sequence) = 0;
-
 
 }; // ClaimStrategy
 
@@ -943,7 +882,7 @@ public:
 		if (0 == _consumers.size())
 		{
 			//throw new IllegalArgumentException("There must be at least one Consumer to track for preventing ring wrap");
-			std::cerr << "There must be at least one Consumer to track for "
+			std::cerr << "CTPB There must be at least one Consumer to track for "
 					"preventing ring wrap" << std::endl;
 		}
 	}
@@ -1035,7 +974,7 @@ public:
 		if (0 == _consumers.size())
 		{
 //			throw new IllegalArgumentException("There must be at least one Consumer to track for preventing ring wrap");
-			std::cerr << "There must be at least one Consumer to track for "
+			std::cerr << "FFCTPB There must be at least one Consumer to track for "
 					"preventing ring wrap" << std::endl;
 
 		}
@@ -1109,8 +1048,7 @@ public:
 		  _claimStrategy(claimStrategy),
 		  _waitStrategy(waitStrategy)
 	{
-
-//		fill(entryFactory);
+//		fill(entryFactory, c);
 //		for (int i = 0; i < _entries.size(); i++) {
 //			_entries[i] = entryFactory.create();
 //		}
