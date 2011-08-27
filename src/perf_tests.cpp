@@ -11,6 +11,7 @@ using namespace disruptor;
 
 int
 main(int argc, char* argv[] ) {
+	boost::interprocess::message_queue::remove("UniCast1P1CPerfTest_Q");
 
 	std::vector<Consumer*> consumers;
 	UniCast1P1CPerfTest test(consumers);
