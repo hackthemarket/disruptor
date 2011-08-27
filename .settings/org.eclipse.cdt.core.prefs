@@ -1,0 +1,7 @@
+#Thu Aug 25 12:35:35 EDT 2011
+eclipse.preferences.version=1
+environment/project/org.eclipse.linuxtools.cdt.autotools.core.toolChain.2101544048/LD_LIBRARY_PATH/delimiter=\:
+environment/project/org.eclipse.linuxtools.cdt.autotools.core.toolChain.2101544048/LD_LIBRARY_PATH/operation=replace
+environment/project/org.eclipse.linuxtools.cdt.autotools.core.toolChain.2101544048/LD_LIBRARY_PATH/value=/usr/local/lib\:/home/tingarg/dev/tbb/build/linux_intel64_gcc_cc4.4.3_libc2.11.1_kernel2.6.32_release
+environment/project/org.eclipse.linuxtools.cdt.autotools.core.toolChain.2101544048/append=true
+environment/project/org.eclipse.linuxtools.cdt.autotools.core.toolChain.2101544048/appendContributed=true
