@@ -190,7 +190,7 @@ public:
      *
      * @return the claimed {@link AbstractEntry}
      */
-	virtual T nextEntry() = 0;
+	virtual T& nextEntry() = 0;
 
     /**
      * Claim the next batch of {@link AbstractEntry}s in sequence.
@@ -246,7 +246,7 @@ public:
      * Get the {@link AbstractEntry} for a given sequence from the
      * underlying {@link RingBuffer}.
      */
-    virtual T getEntry(const long sequence) = 0;
+    virtual T& getEntry(const long sequence) = 0;
 
     /**
      * Wait for the given sequence to be available for consumption.
@@ -821,16 +821,17 @@ class ConsumerTrackingConsumerBarrier: public ConsumerBarrier<T> {
 private:
 	tbb::atomic<bool> _alerted;
 	RingBuffer<T>* _ring;
-  	std::vector<Consumer*> _consumers;
+  	std::vector<Consumer*>& _consumers;
 public:
 
 	ConsumerTrackingConsumerBarrier(RingBuffer<T>* ring,
-			std::vector<Consumer*> consumers)
+			std::vector<Consumer*>& consumers)
 	: _consumers(consumers), _ring(ring) {
 		_alerted = false;
 	}
 
-	virtual T getEntry(const long sequence) {
+	virtual T& getEntry(const long sequence) {
+		std::cout << "CTTCB.getEntry(" << sequence << std::endl;
 		return _ring->_entries[(int) sequence & _ring->_ringModMask];
 	}
 
@@ -868,14 +869,14 @@ public:
 template <typename T>
 class ConsumerTrackingProducerBarrier : public ProducerBarrier<T> {
 private :
-	std::vector<Consumer*> _consumers;
+	std::vector<Consumer*>& _consumers;
 	long _lastConsumerMinimum;
 	RingBuffer<T>* _ring;
 
 public:
 
 	ConsumerTrackingProducerBarrier(RingBuffer<T>* ring,
-			std::vector<Consumer*> consumers )
+			std::vector<Consumer*>& consumers )
 	: _consumers(consumers), _lastConsumerMinimum(INITIAL_CURSOR_VALUE),
 	  _ring(ring) {
 
@@ -887,11 +888,11 @@ public:
 		}
 	}
 
-	T nextEntry() {
+	T& nextEntry() {
 		const long sequence = _ring->_claimStrategy->incrementAndGet();
 		ensureConsumersAreInRange(sequence);
 
-		T entry = _ring->entries()[(int)sequence & _ring->ringModMask()];
+		T& entry = _ring->entries()[(int)sequence & _ring->ringModMask()];
 		entry.setSequence(sequence);
 
 		return entry;
@@ -939,6 +940,7 @@ private:
 
 	void commit(const long sequence, const long batchSize)
 	{
+		// TODO:
 //		if (ClaimStrategy.Option.MULTI_THREADED == claimStrategyOption )
 //		{
 //			const long expectedSequence = sequence - batchSize;
@@ -947,9 +949,9 @@ private:
 //				// busy spin
 //			}
 //		}
-//
-//		_ring._cursor = sequence;
-//		_ring._waitStrategy.signalAll();
+
+		_ring->_cursor = sequence;
+		_ring->_waitStrategy->signalAll();
 	}
 };
 
@@ -1081,7 +1083,7 @@ public:
 	 * @return the barrier gated as required
 	 */
 	ConsumerBarrier<T>*
-	createConsumerBarrier(std::vector<Consumer*> consumersToTrack)  {
+	createConsumerBarrier(std::vector<Consumer*>& consumersToTrack)  {
 		return new ConsumerTrackingConsumerBarrier<T>(this, consumersToTrack);
 	}
 
@@ -1093,7 +1095,7 @@ public:
 	 * @return a {@link ProducerBarrier} with the above configuration.
 	 */
 	 ProducerBarrier<T>* createProducerBarrier
-	 	 (std::vector<Consumer*> consumersToTrack ) const
+	 	 (std::vector<Consumer*>& consumersToTrack ) const
 	 {
 		return new ConsumerTrackingProducerBarrier<T>(const_cast<RingBuffer<T>* >(this), consumersToTrack);
 	 }
@@ -1346,6 +1348,7 @@ public:
     /**
      * It is ok to have another thread rerun this method after a halt().
      */
+ //  virtual void operator()() {
     virtual void run()
     {
         _running = true;
@@ -1360,15 +1363,15 @@ public:
         {
 //            try
 //            {
-//                const long availableSequence = consumerBarrier.waitFor(nextSequence);
-//                for (; nextSequence <= availableSequence; nextSequence++)
-//                {
-//                    entry = consumerBarrier.getEntry(nextSequence);
-//                    handler.onAvailable(entry);
-//                }
-//
-//                handler.onEndOfBatch();
-//                sequence = entry.getSequence();
+                const long availableSequence = _consumerBarrier->waitFor(nextSequence);
+                for (; nextSequence <= availableSequence; nextSequence++)
+                {
+                    entry = _consumerBarrier->getEntry(nextSequence);
+                    _handler->onAvailable(entry);
+                }
+
+                _handler->onEndOfBatch();
+                _sequence = entry.getSequence();
 //            }
 //            catch (final AlertException ex)
 //            {

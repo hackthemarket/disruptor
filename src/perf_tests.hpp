@@ -44,11 +44,8 @@ public :
 
         for (int i = 0; i < RUNS; i++)
         {
-//            System.gc();
-
             //disruptorOps = runDisruptorPass(i);
             queueOps = runQueuePass(i);
-
             printResults(disruptorOps, queueOps, i);
         }
 
@@ -101,38 +98,27 @@ private :
     tbb::concurrent_bounded_queue<long>& _blockingQ;
 
 public:
-	tbb::atomic<bool> writing;
-
-    void operator()() {
-        _running = true;
-         long val;
-         size_t recvd;
-         unsigned int pri;
-         while (_running==true )  {
-        	_blockingQ.pop(val);
-        	// _blockingQ.receive(&val,sizeof(val), recvd, pri);
-  //      	 if (recvd != sizeof(val) || val < 0) break;//_running = false;
-         	_value += val;
-            _sequence++;
-//            if (!writing)
-//           	std::cout << " consumer: popped: " << val << " seq = "
-//           			<< getSequence() << " val = " << getValue()
-//           			<< " writing = " << writing << std::endl;
-         }
-         std::cout << "consumer: done" << std::endl;
-   }
 
     ValueAdditionQueueConsumer
     	(tbb::concurrent_bounded_queue<long>& blockingQueue)
     	: _value(0), _blockingQ(blockingQueue)
     { }
 
+    void operator()() {
+    	_running = true;
+    	long val;
+    	while (_running || _blockingQ.size() > 0 )  {
+    		_blockingQ.pop(val);
+    		_value += val;
+    		_sequence++;
+    	}
+    }
+
     long getValue() { return _value; }
 
 	void reset()  {
 		_value = 0L;
         _sequence = -1L;
-        writing = true;
     }
 
     long getSequence() { return _sequence; }
@@ -200,30 +186,21 @@ private:
     }
 
 	static const long SIZE = 1024 * 32;
-    static const long ITERATIONS = 1000L * 1000L * 500L;
-	//static const long ITERATIONS = 1000L * 1000L * 10L ;//* 500L;
-  //  const ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
-    const long _expectedResult;
+   // static const long ITERATIONS = 1000L * 1000L * 500L;
+	static const long ITERATIONS = 1000L * 1000L  ;//* 500L;
 
-//    tbb::concurrent_bounded_queue<long> _blockingQ;
-    tbb::concurrent_bounded_queue<long>  _blockingQ;
-    ValueAdditionQueueConsumer* _qConsumer;// = new ValueAdditionQueueConsumer(blockingQueue);
-
-    ///////////////////////////////////////////////////////////////////////////////////////////////
-
-    RingBuffer<ValueEntry> _ring;
-//        new RingBuffer<ValueEntry>(ValueEntry::Factory, SIZE,
-//                                   SingleThreadedStrategy,
-//                                   YieldingWait);
-    ConsumerBarrier<ValueEntry>* _consumerBarrier;// = ringBuffer.createConsumerBarrier();
-	ValueAdditionHandler* _handler;// = new ValueAdditionHandler();
-    BatchConsumer<ValueEntry>* _batchConsumer;// = new BatchConsumer<ValueEntry>(consumerBarrier, handler);
-    ProducerBarrier<ValueEntry>* _producerBarrier;// = ringBuffer.createProducerBarrier(batchConsumer);
-
-    ///////////////////////////////////////////////////////////////////////////////////////////////
+	const long 									_expectedResult;
+    tbb::concurrent_bounded_queue<long>  		_blockingQ;
+    ValueAdditionQueueConsumer* 				_qConsumer;
+    RingBuffer<ValueEntry> 						_ring;
+    ConsumerBarrier<ValueEntry>* 				_consumerBarrier;
+	ValueAdditionHandler* 						_handler;
+    BatchConsumer<ValueEntry>* 					_batchConsumer;
+    ProducerBarrier<ValueEntry>* 				_producerBarrier;
 
 public :
-    UniCast1P1CPerfTest(std::vector<Consumer*> consumers )
+
+    UniCast1P1CPerfTest(std::vector<Consumer*>& consumers )
     : _expectedResult(CalcExpectedResult()) ,
       _blockingQ( tbb::concurrent_bounded_queue<long>()),
       _qConsumer(new ValueAdditionQueueConsumer(_blockingQ)),
@@ -231,18 +208,19 @@ public :
     		  new SingleThreadedStrategy(), new YieldingWait()),
       _consumerBarrier(_ring.createConsumerBarrier(consumers)),
       _handler(new ValueAdditionHandler()),
-      _batchConsumer( new BatchConsumer<ValueEntry>(_consumerBarrier, _handler))
-      //_producerBarrier(_ring.createProducerBarrier(std::vector _batchConsumer))
+      _batchConsumer( new BatchConsumer<ValueEntry>(_consumerBarrier, _handler)),
+      _producerBarrier(_ring.createProducerBarrier(consumers))
 
     {
     	std::vector<Consumer*> cons;
     	cons.push_back(_batchConsumer);
-    	_producerBarrier = _ring.createProducerBarrier(cons);
     	_blockingQ.set_capacity(SIZE);
     	std::cout << "set q size to " << SIZE << std::endl;
     }
 
-    ~UniCast1P1CPerfTest() {  boost::interprocess::message_queue::remove("UniCast1P1CPerfTest_Q"); }
+    ~UniCast1P1CPerfTest() {
+
+    }
 
 
     void shouldCompareDisruptorVsQueues()
@@ -254,9 +232,6 @@ public :
     virtual long runQueuePass(const int passNumber) //throws InterruptedException
     {
         _qConsumer->reset();
-        //Future future = EXECUTOR.submit(_qConsumer);
-
-        //long start = System.currentTimeMillis();
         boost::posix_time::ptime start =
         		boost::posix_time::microsec_clock::universal_time();
 
@@ -265,27 +240,18 @@ public :
         for (long i = 0; i < ITERATIONS; i++)
         {
         	_blockingQ.push(i);
-//            std::cout << "producer: pushed " << i << std::endl;
         }
-        std::cout << "producer: done writing "  << std::endl;
-        _qConsumer->writing = false;
+       // std::cout << "producer: done writing "  << std::endl;
+
         const long expectedSequence = ITERATIONS - 1L;
-        while ( _blockingQ.size() > 0 )
-        {
-  //            // busy spin
-        }
-        std::cout << "producer: done spin "  << std::endl;
+
+        _qConsumer->halt();
+        task.join();
 
         boost::posix_time::time_period per(start,
         		boost::posix_time::microsec_clock::universal_time());
         boost::posix_time::time_duration dur = per.length();
         long opsPerSecond = (ITERATIONS * 1000L) / dur.total_milliseconds();
-        std::cout << "ops per sec: " << opsPerSecond << std::endl;
-        _qConsumer->halt();
-       // future.cancel(true);  TODO!!
-      // task.join();
-        std::cout << "value = " << _qConsumer->getValue() << std::endl;
-        std::cout << "expected = " << CalcExpectedResult() << std::endl;
 
         assert(CalcExpectedResult() == _qConsumer->getValue());
 
@@ -295,17 +261,17 @@ public :
     virtual long runDisruptorPass(int passNumber)// throws InterruptedException
     {
         _handler->reset();
-
-//       EXECUTOR.submit(_batchConsumer);  TODO!!
-
-
         boost::posix_time::ptime start =
         		boost::posix_time::microsec_clock::universal_time();
+
+        boost::thread task(boost::bind(&BatchConsumer<ValueEntry>::run,
+        		boost::ref(*_batchConsumer)));
 
         for (long i = 0; i < ITERATIONS; i++)
         {
             ValueEntry entry = _producerBarrier->nextEntry();
             entry.setValue(i);
+            std::cout << "producer put " << i << std::endl;
             _producerBarrier->commit(entry);
         }
 
