@@ -44,7 +44,7 @@ public :
 
         for (int i = 0; i < RUNS; i++)
         {
-            //disruptorOps = runDisruptorPass(i);
+            disruptorOps = runDisruptorPass(i);
             queueOps = runQueuePass(i);
             printResults(disruptorOps, queueOps, i);
         }
@@ -79,13 +79,15 @@ public:
 
     void reset()  { _value = 0L; }
 
-    void onAvailable(const ValueEntry entry) //throws Exception
+    void onAvailable(const ValueEntry& entry) //throws Exception
     {
         _value += entry.getValue();
+    //	std::cout << "#" << entry.getValue() << " --> " << _value << std::endl;
     }
 
     void onEndOfBatch() //throws Exception
     {
+    //	std::cout << "VAH: onEndOfBatch()" << std::endl;
     }
 };  // ValueAdditionHandler
 
@@ -186,8 +188,8 @@ private:
     }
 
 	static const long SIZE = 1024 * 32;
-   // static const long ITERATIONS = 1000L * 1000L * 500L;
-	static const long ITERATIONS = 1000L * 1000L  ;//* 500L;
+    static const long ITERATIONS = 1000L * 1000L * 500L;
+	//static const long ITERATIONS = 1000L * 1000L  ;//* 500L;
 
 	const long 									_expectedResult;
     tbb::concurrent_bounded_queue<long>  		_blockingQ;
@@ -205,15 +207,14 @@ public :
       _blockingQ( tbb::concurrent_bounded_queue<long>()),
       _qConsumer(new ValueAdditionQueueConsumer(_blockingQ)),
       _ring( SIZE,
-    		  new SingleThreadedStrategy(), new YieldingWait()),
+    		  new SingleThreadedStrategy(), new YieldingWait<ValueEntry>()),
       _consumerBarrier(_ring.createConsumerBarrier(consumers)),
       _handler(new ValueAdditionHandler()),
       _batchConsumer( new BatchConsumer<ValueEntry>(_consumerBarrier, _handler)),
-      _producerBarrier(_ring.createProducerBarrier(consumers))
+      _producerBarrier(_ring.createProducerBarrier(_batchConsumer))
 
     {
-    	std::vector<Consumer*> cons;
-    	cons.push_back(_batchConsumer);
+    	//consumers.push_back(_batchConsumer);
     	_blockingQ.set_capacity(SIZE);
     	std::cout << "set q size to " << SIZE << std::endl;
     }
@@ -266,28 +267,32 @@ public :
 
         boost::thread task(boost::bind(&BatchConsumer<ValueEntry>::run,
         		boost::ref(*_batchConsumer)));
+        std::cout << "launched disruptor's consumer... " << std::endl;
 
         for (long i = 0; i < ITERATIONS; i++)
         {
-            ValueEntry entry = _producerBarrier->nextEntry();
+            ValueEntry& entry = _producerBarrier->nextEntry();
             entry.setValue(i);
-            std::cout << "producer put " << i << std::endl;
+ //           std::cout << "producer put " << i << std::endl;
             _producerBarrier->commit(entry);
         }
 
         const long expectedSequence = _ring.getCursor();
         while (_batchConsumer->getSequence() < expectedSequence)
         {
-            // busy spin
+            boost::thread::yield();
         }
-
+        _batchConsumer->halt();
+   //     task.join();
+        std::cout << "joined BatchConsumer... done " << std::endl;
         boost::posix_time::time_period per(start,
         		boost::posix_time::microsec_clock::universal_time());
         boost::posix_time::time_duration dur = per.length();
         long opsPerSecond = (ITERATIONS * 1000L) / dur.total_milliseconds();
 
-        _batchConsumer->halt();
-
+//        std::cout << "op/s: " << opsPerSecond << std::endl;
+//        std::cout << "expected: " << CalcExpectedResult() << "value: "
+//        		<< _handler->getValue() << std::endl;
         assert(CalcExpectedResult() == _handler->getValue());
 
         return opsPerSecond;

@@ -361,7 +361,7 @@ public:
      * @throws Exception if the BatchHandler would like the exception handled
      * further up the chain.
      */
-    virtual void onAvailable(T entry) = 0; //throws Exception;
+    virtual void onAvailable(const T& entry) = 0; //throws Exception;
 
     /**
      * Called after each batch of items has been have been processed before
@@ -451,6 +451,7 @@ template <class T> class RingBuffer; // fwd
 /**
  * Strategy employed for making {@link Consumer}s wait on a {@link RingBuffer}.
  */
+template <typename T>
 class WaitStrategy {
 public:
     /**
@@ -466,9 +467,11 @@ public:
      * @throws AlertException if the status of the Disruptor has changed.
      * @throws InterruptedException if the thread is interrupted.
      */
-	template <typename T>
-	long waitFor(std::vector<Consumer*> consumers, RingBuffer<T>* ringBuffer,
-    		ConsumerBarrier<T>* barrier,  long sequence) {};
+	virtual long waitFor(std::vector<Consumer*>& consumers, RingBuffer<T>* ringBuffer,
+    		ConsumerBarrier<T>* barrier,  long sequence) = 0;
+//	{
+//		std::cout << "WS: shouldn't be called!" << std::endl;
+//	};
 //        throws AlertException, InterruptedException;
 
     /**
@@ -485,10 +488,12 @@ public:
      * @throws AlertException if the status of the Disruptor has changed.
      * @throws InterruptedException if the thread is interrupted.
      */
-	template <typename T>
-    long waitFor(std::vector<Consumer*> consumers,
+    virtual long waitFor(std::vector<Consumer*>& consumers,
     		RingBuffer<T>* ringBuffer, ConsumerBarrier<T>* barrier, long sequence,
-    		boost::posix_time::time_duration timeout) {};
+    		boost::posix_time::time_duration timeout) = 0;
+//    {
+//		std::cout << "WS-to: shouldn't be called!" << std::endl;
+//	};
         //throws AlertException, InterruptedException;
 
     /**
@@ -505,7 +510,8 @@ public:
  * This strategy should be used when performance and low-latency are not
  *  as important as CPU resource.
  */
-class BlockingWait : public WaitStrategy {
+template <typename T>
+class BlockingWait : public WaitStrategy<T> {
 private:
 
 	const boost::shared_mutex _mutex;
@@ -515,9 +521,8 @@ private:
 
 public:
 
-	template <typename T>
-	long waitFor(std::vector<Consumer*> consumers, RingBuffer<T> ringBuffer,
-			ConsumerBarrier<T> barrier, long sequence) {
+	long waitFor(std::vector<Consumer*>& consumers, RingBuffer<T>* ringBuffer,
+			ConsumerBarrier<T>* barrier, long sequence) {
 
 		long availableSequence;
 		if ((availableSequence = ringBuffer.getCursor()) < sequence)
@@ -528,7 +533,7 @@ public:
 				if (barrier.isAlerted())
 				{
 					//throw ALERT_EXCEPTION;
-					std::cerr << "ALERT ... " << std::endl;
+					std::cerr << "BW ALERT ... " << std::endl;
 				}
 				//consumerNotifyCondition.await();
 			}
@@ -541,7 +546,7 @@ public:
 			{
 				if (barrier.isAlerted())
 				{
-					std::cerr << "ALERT ... " << std::endl;
+					std::cerr << "BW ALERT ... " << std::endl;
 					//  throw ALERT_EXCEPTION;
 				}
 			}
@@ -550,9 +555,8 @@ public:
 		return availableSequence;
 	}
 
-	template <typename T>
-	long waitFor(std::vector<Consumer*> consumers,
-			RingBuffer<T> ringBuffer, ConsumerBarrier<T> barrier, long sequence,
+	long waitFor(std::vector<Consumer*>& consumers,
+			RingBuffer<T>* ringBuffer, ConsumerBarrier<T>* barrier, long sequence,
 			boost::posix_time::time_duration timeout) {
 		long availableSequence;
 		if ((availableSequence = ringBuffer.getCursor()) < sequence)
@@ -563,7 +567,7 @@ public:
 				if (barrier.isAlerted())
 				{
 					// throw ALERT_EXCEPTION;
-					std::cerr << "ALERT ... " << std::endl;
+					std::cerr << "BW ALERT ... " << std::endl;
 				}
 
 				//                        if (!consumerNotifyCondition.await(timeout, units))
@@ -580,7 +584,7 @@ public:
 			{
 				if (barrier.isAlerted())
 				{
-					std::cerr << "ALERT ... " << std::endl;
+					std::cerr << "BW ALERT ... " << std::endl;
 					//                  throw ALERT_EXCEPTION;
 				}
 			}
@@ -603,29 +607,31 @@ public:
  *
  * This strategy is a good compromise between performance and CPU resource.
  */
-class YieldingWait: public WaitStrategy {
+template <typename T>
+class YieldingWait: public WaitStrategy<T> {
 public:
 
-	template<typename T>
-	long waitFor(std::vector<Consumer*> consumers, RingBuffer<T>* ringBuffer,
+	long waitFor(std::vector<Consumer*>& consumers, RingBuffer<T>* ringBuffer,
     		ConsumerBarrier<T>* barrier,  long sequence) {
 		long availableSequence;
 
 		if (0 == consumers.size()) {
-			while ((availableSequence = ringBuffer.getCursor()) < sequence) {
-				if (barrier.isAlerted()) {
+//			std::cout << "YW: no consumers" << std::endl;
+			while ((availableSequence = ringBuffer->getCursor()) < sequence) {
+				if (barrier->isAlerted()) {
 					//throw ALERT_EXCEPTION;
-					std::cerr << "ALERT ... " << std::endl;
+					std::cerr << "YW ALERT ... " << std::endl;
 				}
 				//Thread.yield();
 				boost::this_thread::yield();
 			}
 		} else {
+//			std::cout << "YW: consumers: " << consumers.size() << std::endl;
 			while ((availableSequence = getMinimumSequence(consumers))
 					< sequence) {
-				if (barrier.isAlerted()) {
+				if (barrier->isAlerted()) {
 					//throw ALERT_EXCEPTION;
-					std::cerr << "ALERT ... " << std::endl;
+					std::cerr << "YW ALERT ... " << std::endl;
 				}
 				boost::this_thread::yield();
 				//				Thread.yield();
@@ -635,26 +641,27 @@ public:
 		return availableSequence;
 	}
 
-	template<typename T>
-	long waitFor(std::vector<Consumer*> consumers, RingBuffer<T> ringBuffer,
-			ConsumerBarrier<T> barrier, long sequence,
+	long waitFor(std::vector<Consumer*>& consumers, RingBuffer<T>* ringBuffer,
+			ConsumerBarrier<T>* barrier, long sequence,
 			boost::posix_time::time_duration timeout) {
 
-		const boost::posix_time::ptime currentTime();//System.currentTimeMillis();
+        boost::posix_time::ptime start =
+        		boost::posix_time::microsec_clock::universal_time();
 		long availableSequence;
 
 		if (0 == consumers.size()) {
-			while ((availableSequence = ringBuffer.getCursor()) < sequence) {
-				if (barrier.isAlerted()) {
+			while ((availableSequence = ringBuffer->getCursor()) < sequence) {
+				if (barrier->isAlerted()) {
 					//throw ALERT_EXCEPTION;
-					std::cerr << "ALERT ... " << std::endl;
+					std::cerr << " YW ALERT ... " << std::endl;
 
 				}
 
 				boost::this_thread::yield();
 				//				Thread.yield();
 				boost::posix_time::ptime now();
-				boost::posix_time::time_period per(currentTime, now);
+		        boost::posix_time::time_period per(start,
+		        		boost::posix_time::microsec_clock::universal_time());
 				if (timeout < per.length()) {
 					break;
 				}
@@ -662,14 +669,14 @@ public:
 		} else {
 			while ((availableSequence = getMinimumSequence(consumers))
 					< sequence) {
-				if (barrier.isAlerted()) {
+				if (barrier->isAlerted()) {
 					//					throw ALERT_EXCEPTION;
-					std::cerr << "ALERT ... " << std::endl;
+					std::cerr << "YW ALERT ... " << std::endl;
 				}
 				boost::this_thread::yield();
 				//			Thread.yield();
-				boost::posix_time::ptime now();
-				boost::posix_time::time_period per(currentTime, now);
+		        boost::posix_time::time_period per(start,
+		        		boost::posix_time::microsec_clock::universal_time());
 				if (timeout < per.length()) {
 					break;
 				}
@@ -691,13 +698,13 @@ public:
  *  latency jitter.  It is best
  * used when threads can be bound to specific CPU cores.
  */
-class BusySpinWait: public WaitStrategy {
+template <typename T>
+class BusySpinWait: public WaitStrategy<T> {
 
 public:
 
-	template <typename T>
-	long waitFor(std::vector<Consumer*> consumers, RingBuffer<T> ringBuffer,
-			ConsumerBarrier<T> barrier, long sequence) {
+	long waitFor(std::vector<Consumer*>& consumers, RingBuffer<T>* ringBuffer,
+			ConsumerBarrier<T>* barrier, long sequence) {
 		long availableSequence;
 
 		if (0 == consumers.size())
@@ -728,9 +735,8 @@ public:
 		return availableSequence;
 	}
 
-	template <typename T>
-	long waitFor(std::vector<Consumer*> consumers,
-			RingBuffer<T> ringBuffer, ConsumerBarrier<T> barrier, long sequence,
+	long waitFor(std::vector<Consumer*>& consumers,
+			RingBuffer<T>* ringBuffer, ConsumerBarrier<T>* barrier, long sequence,
 			boost::posix_time::time_duration timeout) {
 		const boost::posix_time::ptime currentTime();//System.currentTimeMillis();
 		long availableSequence;
@@ -831,7 +837,7 @@ public:
 	}
 
 	virtual T& getEntry(const long sequence) {
-		std::cout << "CTTCB.getEntry(" << sequence << std::endl;
+//		std::cout << "CTCB.getEntry :" << sequence << std::endl;
 		return _ring->_entries[(int) sequence & _ring->_ringModMask];
 	}
 
@@ -854,7 +860,7 @@ public:
 	virtual bool isAlerted() {return _alerted;}
 
 	virtual void alert() {
-		_alerted = true;
+		//_alerted = true; TODO!!
 		_ring->_waitStrategy->signalAll();
 	}
 
@@ -894,11 +900,13 @@ public:
 
 		T& entry = _ring->entries()[(int)sequence & _ring->ringModMask()];
 		entry.setSequence(sequence);
-
+//		std::cout << "CTPB: nextEntry: " << sequence << std::endl;
 		return entry;
 	}
 
-	void commit(const T entry)	{ commit(entry.getSequence(), 1); }
+	void commit(const T entry)	{
+		commit(entry.getSequence(), 1);
+	}
 
 	SequenceBatch nextEntries(SequenceBatch sequenceBatch) {
 		const long sequence = _ring->_claimStrategy->
@@ -949,8 +957,12 @@ private:
 //				// busy spin
 //			}
 //		}
+//		std::cout << "CTPB: commit: " << sequence << std::endl;
 
 		_ring->_cursor = sequence;
+
+//		std::cout << "CTPB: cursor : " << _ring->_cursor << std::endl;
+
 		_ring->_waitStrategy->signalAll();
 	}
 };
@@ -964,13 +976,13 @@ class ForceFillConsumerTrackingProducerBarrier
 	: public ForceFillProducerBarrier<T>
 {
 private:
-		const std::vector<Consumer*> _consumers;
+		const std::vector<Consumer*>& _consumers;
 		long _lastConsumerMinimum;
 		const RingBuffer<T>& _ring;
 
 public:
 		ForceFillConsumerTrackingProducerBarrier
-			(const std::vector<Consumer*> consumers, const RingBuffer<T>& ring)
+			(const std::vector<Consumer*>& consumers, const RingBuffer<T>& ring)
 		: _consumers(consumers), _lastConsumerMinimum(INITIAL_CURSOR_VALUE),
 		  _ring(ring) {
 		if (0 == _consumers.size())
@@ -1017,21 +1029,18 @@ private :
 template <typename T>
 class RingBuffer {
 private:
-	volatile long _cursor;
-	const int _ringModMask;
-	//std::vector<AbstractEntry> _entries;
-	std::vector<T> _entries;
-	ClaimStrategy* _claimStrategy;
-//	const ClaimStrategyOption* _claimStrategyOption;
-	WaitStrategy* _waitStrategy;
+	long p1, p2, p3, p4, p5, p6, p7; // cache line padding
+	tbb::atomic<long>			_cursor;  // TODO: atomic_fence?
+	long p8, p9, p10, p11, p12, p13, p14; // cache line padding
+	const int 				_ringModMask;
+	std::vector<T> 			_entries;
+	ClaimStrategy* 			_claimStrategy;
+	WaitStrategy<T>* 			_waitStrategy;
 
 	friend class ConsumerTrackingConsumerBarrier<T>;
 	friend class ConsumerTrackingProducerBarrier<T>;
 
 public:
-//	const static long INITIAL_CURSOR_VALUE = -1L;
-	long p1, p2, p3, p4, p5, p6, p7; // cache line padding
-	long p8, p9, p10, p11, p12, p13, p14; // cache line padding
 
 	/**
 	 * Construct a RingBuffer with the full option set.
@@ -1043,13 +1052,14 @@ public:
 	 */
 	RingBuffer(const int size,
 			ClaimStrategy* claimStrategy ,//= new MultiThreadedStrategy(),
-			WaitStrategy* waitStrategy = new BlockingWait() )
-		: _cursor(INITIAL_CURSOR_VALUE) ,
+			WaitStrategy<T>* waitStrategy = new BlockingWait<T>() )
+		: //_cursor(INITIAL_CURSOR_VALUE) ,
 		  _ringModMask(ceilingNextPowerOfTwo(size)-1),
 		  _entries(_ringModMask+1),
 		  _claimStrategy(claimStrategy),
 		  _waitStrategy(waitStrategy)
 	{
+		_cursor = INITIAL_CURSOR_VALUE;
 //		fill(entryFactory, c);
 //		for (int i = 0; i < _entries.size(); i++) {
 //			_entries[i] = entryFactory.create();
@@ -1099,6 +1109,13 @@ public:
 	 {
 		return new ConsumerTrackingProducerBarrier<T>(const_cast<RingBuffer<T>* >(this), consumersToTrack);
 	 }
+	 ProducerBarrier<T>* createProducerBarrier
+	 	 (Consumer* consumer ) const
+	 {
+		std::vector<Consumer*>* vec = new std::vector<Consumer*> ();
+		vec->push_back(consumer);
+		return new ConsumerTrackingProducerBarrier<T>(const_cast<RingBuffer<T>* >(this), *vec);
+	 }
 
 	/**
 	 * Create a {@link ForceFillProducerBarrier} on this RingBuffer that tracks
@@ -1108,7 +1125,7 @@ public:
 	 * @param consumersToTrack to be tracked to prevent wrapping.
 	 * @return a {@link ForceFillProducerBarrier} with the above configuration.
 	 */
-	ForceFillProducerBarrier<T> createForceFillProducerBarrier(const std::vector<Consumer> consumersToTrack)
+	ForceFillProducerBarrier<T> createForceFillProducerBarrier(const std::vector<Consumer>& consumersToTrack)
 	{
 		return new ForceFillConsumerTrackingProducerBarrier<T>(consumersToTrack);
 	}
@@ -1352,6 +1369,7 @@ public:
     virtual void run()
     {
         _running = true;
+        std::cout << "BatchConsumer: running " << std::endl;
 //        if (LifecycleAware.class.isAssignableFrom(handler.getClass()))
 //        {
 //            ((LifecycleAware)handler).onStart();
@@ -1364,9 +1382,14 @@ public:
 //            try
 //            {
                 const long availableSequence = _consumerBarrier->waitFor(nextSequence);
+//                std::cout << "available seq: " << availableSequence << std::endl;
+//                std::cout << "next seq: " << nextSequence << std::endl;
+
                 for (; nextSequence <= availableSequence; nextSequence++)
                 {
                     entry = _consumerBarrier->getEntry(nextSequence);
+//                    std::cout << "batchconsumer got "
+//                    		<< entry.getSequence() << std::endl;
                     _handler->onAvailable(entry);
                 }
 
@@ -1384,6 +1407,7 @@ public:
 //                nextSequence = entry.getSequence() + 1;
 //            }
         }
+        std::cout << "BatchConsumer: done " << std::endl;
 
 //        if (LifecycleAware.class.isAssignableFrom(handler.getClass()))
 //        {
