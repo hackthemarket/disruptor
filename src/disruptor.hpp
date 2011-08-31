@@ -620,7 +620,8 @@ public:
 			while ((availableSequence = ringBuffer->getCursor()) < sequence) {
 				if (barrier->isAlerted()) {
 					//throw ALERT_EXCEPTION;
-					std::cerr << "YW ALERT ... " << std::endl;
+		//			std::cerr << "YW ALERT ... " << std::endl;
+					break;
 				}
 				//Thread.yield();
 				boost::this_thread::yield();
@@ -860,7 +861,7 @@ public:
 	virtual bool isAlerted() {return _alerted;}
 
 	virtual void alert() {
-		//_alerted = true; TODO!!
+		_alerted = true; //TODO!!
 		_ring->_waitStrategy->signalAll();
 	}
 
@@ -1334,6 +1335,7 @@ public:
 
 	virtual void halt()
     {
+		//std::cout << "Halt!" << std::endl;
         _running = false;
         _consumerBarrier->alert();
     }
@@ -1369,7 +1371,7 @@ public:
     virtual void run()
     {
         _running = true;
-        std::cout << "BatchConsumer: running " << std::endl;
+   //     std::cout << "BatchConsumer: running " << std::endl;
 //        if (LifecycleAware.class.isAssignableFrom(handler.getClass()))
 //        {
 //            ((LifecycleAware)handler).onStart();
@@ -1388,8 +1390,10 @@ public:
                 for (; nextSequence <= availableSequence; nextSequence++)
                 {
                     entry = _consumerBarrier->getEntry(nextSequence);
-//                    std::cout << "batchconsumer got "
-//                    		<< entry.getSequence() << std::endl;
+//                    if (nextSequence % 100000 == 0) {
+//						std::cout << "batchconsumer got "
+//								<< entry.getSequence() << std::endl;
+//                    }
                     _handler->onAvailable(entry);
                 }
 
@@ -1407,7 +1411,7 @@ public:
 //                nextSequence = entry.getSequence() + 1;
 //            }
         }
-        std::cout << "BatchConsumer: done " << std::endl;
+ //       std::cout << "BatchConsumer: done " << std::endl;
 
 //        if (LifecycleAware.class.isAssignableFrom(handler.getClass()))
 //        {

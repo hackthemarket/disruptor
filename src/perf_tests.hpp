@@ -188,8 +188,8 @@ private:
     }
 
 	static const long SIZE = 1024 * 32;
-    static const long ITERATIONS = 1000L * 1000L * 500L;
-	//static const long ITERATIONS = 1000L * 1000L  ;//* 500L;
+  //  static const long ITERATIONS = 1000L * 1000L * 500L;
+	static const long ITERATIONS = 1000L * 1000L * 20L ;//* 500L;
 
 	const long 									_expectedResult;
     tbb::concurrent_bounded_queue<long>  		_blockingQ;
@@ -254,6 +254,9 @@ public :
         boost::posix_time::time_duration dur = per.length();
         long opsPerSecond = (ITERATIONS * 1000L) / dur.total_milliseconds();
 
+//		std::cout << "op/s: " << opsPerSecond << std::endl;
+//		std::cout << "expected: " << CalcExpectedResult() << " value: "
+//				<< _handler->getValue() << std::endl;
         assert(CalcExpectedResult() == _qConsumer->getValue());
 
         return opsPerSecond;
@@ -267,7 +270,7 @@ public :
 
         boost::thread task(boost::bind(&BatchConsumer<ValueEntry>::run,
         		boost::ref(*_batchConsumer)));
-        std::cout << "launched disruptor's consumer... " << std::endl;
+//        std::cout << "launched disruptor's consumer... " << std::endl;
 
         for (long i = 0; i < ITERATIONS; i++)
         {
@@ -283,8 +286,9 @@ public :
             boost::thread::yield();
         }
         _batchConsumer->halt();
-   //     task.join();
-        std::cout << "joined BatchConsumer... done " << std::endl;
+        task.interrupt();
+        task.join();
+ //       std::cout << "joined BatchConsumer... done " << std::endl;
         boost::posix_time::time_period per(start,
         		boost::posix_time::microsec_clock::universal_time());
         boost::posix_time::time_duration dur = per.length();
