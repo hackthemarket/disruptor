@@ -142,7 +142,9 @@ public:
      * @param size of the batch to claim.
      */
     SequenceBatch(const int size) : _size(size), _end(INITIAL_CURSOR_VALUE)
-    { }
+    {
+    //	std::cout << "SequenceBatch: " << _size << std::endl;
+    }
 
     /**
      * Get the end sequence of a batch.
@@ -157,7 +159,10 @@ public:
      *
      * @param end sequence in the batch.
      */
-    void setEnd(const long end) { this->_end = end; }
+    void setEnd(const long end) {
+    	this->_end = end;
+    //	std::cout << "SequenceBatch: end = " << _end << std::endl;
+    }
 
     /**
      * Get the size of the batch.
@@ -198,21 +203,22 @@ public:
      * @param sequenceBatch to be updated for the batch range.
      * @return the updated sequenceBatch.
      */
-    virtual SequenceBatch nextEntries(SequenceBatch sequenceBatch)= 0;
+ //   virtual SequenceBatch nextEntries(SequenceBatch sequenceBatch)= 0;
+	virtual SequenceBatch* nextEntries(SequenceBatch* sequenceBatch) = 0;
 
     /**
      * Commit an entry back to the {@link RingBuffer} to make it visible
      * to {@link Consumer}s
      * @param entry to be committed back to the {@link RingBuffer}
      */
-    virtual void commit(T entry) = 0;
+    virtual void commit(T& entry) = 0;
 
     /**
      * Commit the batch of entries back to the {@link RingBuffer}.
      *
      * @param sequenceBatch to be committed.
      */
-    virtual void commit(SequenceBatch sequenceBatch) = 0;
+    virtual void commit(SequenceBatch* sequenceBatch) = 0;
 
     /**
      * Get the {@link AbstractEntry} for a given sequence from the
@@ -221,7 +227,7 @@ public:
      * @param sequence of the {@link AbstractEntry} to get.
      * @return the {@link AbstractEntry} for the sequence.
      */
-    virtual T getEntry(long sequence) = 0;
+    virtual T& getEntry(long sequence) = 0;
 
     /**
      * Delegate a call to the {@link RingBuffer#getCursor()}
@@ -620,7 +626,7 @@ public:
 			while ((availableSequence = ringBuffer->getCursor()) < sequence) {
 				if (barrier->isAlerted()) {
 					//throw ALERT_EXCEPTION;
-		//			std::cerr << "YW ALERT ... " << std::endl;
+					std::cerr << "YW ALERT ... " << std::endl;
 					break;
 				}
 				//Thread.yield();
@@ -905,17 +911,17 @@ public:
 		return entry;
 	}
 
-	void commit(const T entry)	{
+	virtual void commit(T& entry)	{
 		commit(entry.getSequence(), 1);
 	}
 
-	SequenceBatch nextEntries(SequenceBatch sequenceBatch) {
+	SequenceBatch* nextEntries(SequenceBatch* sequenceBatch) {
 		const long sequence = _ring->_claimStrategy->
-				incrementAndGet(sequenceBatch.getSize());
-		sequenceBatch.setEnd(sequence);
+				incrementAndGet(sequenceBatch->getSize());
+		sequenceBatch->setEnd(sequence);
 		ensureConsumersAreInRange(sequence);
 
-		for (long i = sequenceBatch.getStart(), _end = sequenceBatch.getEnd(); i <= _end; i++)
+		for (long i = sequenceBatch->getStart(), _end = sequenceBatch->getEnd(); i <= _end; i++)
 		{
 			T entry = _ring->_entries[(int)i & _ring->ringModMask()];
 			entry.setSequence(i);
@@ -924,12 +930,12 @@ public:
 		return sequenceBatch;
 	}
 
-	void commit(SequenceBatch sequenceBatch)
+	void commit(SequenceBatch* sequenceBatch)
 	{
-		commit(sequenceBatch.getEnd(), sequenceBatch.getSize());
+		commit(sequenceBatch->getEnd(), sequenceBatch->getSize());
 	}
 
-	T getEntry(const long sequence)	{
+	T& getEntry(const long sequence)	{
 		return _ring->_entries[(int) sequence & _ring->ringModMask()];
 	}
 
@@ -958,7 +964,7 @@ private:
 //				// busy spin
 //			}
 //		}
-//		std::cout << "CTPB: commit: " << sequence << std::endl;
+//		std::cout << "CTPB: commit: " << sequence << " - " << batchSize << std::endl;
 
 		_ring->_cursor = sequence;
 
@@ -1284,7 +1290,7 @@ class BatchConsumer : public Consumer
 {
 private:
 
-	friend class SequenceTrackerCallback<T>;
+	//friend class SequenceTrackerCallback<T>;
 
 	ConsumerBarrier<T>* _consumerBarrier;
     BatchHandler<T>* 	_handler;
@@ -1390,16 +1396,26 @@ public:
                 for (; nextSequence <= availableSequence; nextSequence++)
                 {
                     entry = _consumerBarrier->getEntry(nextSequence);
-//                    if (nextSequence % 100000 == 0) {
-//						std::cout << "batchconsumer got "
-//								<< entry.getSequence() << std::endl;
-//                    }
+                    if (nextSequence % 1000 == 0) {
+						std::cout << "batchconsumer got "
+								<< entry.getSequence() << " for: "
+								<< nextSequence << std::endl;
+                    }
                     _handler->onAvailable(entry);
                 }
+//std::cout << "batchconsumer: still running... " << std::endl;
 
                 _handler->onEndOfBatch();
                 _sequence = entry.getSequence();
-//            }
+				if (_consumerBarrier->isAlerted()) {
+					//exceptionHandler.handle(ex, entry);
+					_sequence = entry.getSequence();
+					nextSequence = entry.getSequence() + 1;
+std::cout << "batchconsumer: handling alert... " << std::endl;
+
+				}
+
+                //            }
 //            catch (final AlertException ex)
 //            {
 //                // Wake up from blocking wait and check if we should continue to run
