@@ -14,14 +14,11 @@ main(int argc, char* argv[] ) {
 	boost::interprocess::message_queue::remove("UniCast1P1CPerfTest_Q");
 
 	std::vector<Consumer*> consumers;
-//	UniCast1P1CPerfTest test(consumers);
-//	test.shouldCompareDisruptorVsQueues();
+	UniCast1P1CPerfTest test(consumers);
+	test.shouldCompareDisruptorVsQueues();
 
-	UniCast1P1CBatchPerfTest test1(consumers);
-	test1.shouldCompareDisruptorVsQueues();
-
-
-
+//	UniCast1P1CBatchPerfTest test1(consumers);
+//	test1.shouldCompareDisruptorVsQueues();
 
 	return EXIT_SUCCESS;
 }

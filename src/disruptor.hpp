@@ -61,7 +61,26 @@ inline int numberOfLeadingZeros(int i) {
   */
 inline int ceilingNextPowerOfTwo(const int x) {
      return 1 << (32 - numberOfLeadingZeros(x - 1));
- }
+}
+
+/**
+ * Used to alert consumers waiting at a {@link ConsumerBarrier} of status changes.
+ */
+class AlertException : public std::exception {
+private:
+  static const AlertException * _Alert;
+  static boost::shared_mutex _Mutex;
+
+public:
+
+  static const AlertException & Alert() {
+	  if (_Alert==NULL) {
+		  boost::unique_lock< boost::shared_mutex > lock(_Mutex);
+		  _Alert = new AlertException();
+	  }
+	  return *_Alert;
+  }
+}; // AlertException
 
 
 class AbstractEntry {
@@ -510,104 +529,6 @@ public:
 
 
 /**
- * Blocking strategy that uses a lock and condition variable for
- * {@link Consumer}s waiting on a barrier.
- *
- * This strategy should be used when performance and low-latency are not
- *  as important as CPU resource.
- */
-template <typename T>
-class BlockingWait : public WaitStrategy<T> {
-private:
-
-	const boost::shared_mutex _mutex;
-
-	//	const Lock lock = new ReentrantLock();
-	//       const Condition consumerNotifyCondition = lock.newCondition();
-
-public:
-
-	long waitFor(std::vector<Consumer*>& consumers, RingBuffer<T>* ringBuffer,
-			ConsumerBarrier<T>* barrier, long sequence) {
-
-		long availableSequence;
-		if ((availableSequence = ringBuffer.getCursor()) < sequence)
-		{
-			boost::unique_lock< boost::shared_mutex > lock(_mutex);
-			while ((availableSequence = ringBuffer.getCursor()) < sequence)
-			{
-				if (barrier.isAlerted())
-				{
-					//throw ALERT_EXCEPTION;
-					std::cerr << "BW ALERT ... " << std::endl;
-				}
-				//consumerNotifyCondition.await();
-			}
-		}
-
-		if (0 != consumers.size())
-		{
-			while ((availableSequence =
-					getMinimumSequence(consumers)) < sequence)
-			{
-				if (barrier.isAlerted())
-				{
-					std::cerr << "BW ALERT ... " << std::endl;
-					//  throw ALERT_EXCEPTION;
-				}
-			}
-		}
-
-		return availableSequence;
-	}
-
-	long waitFor(std::vector<Consumer*>& consumers,
-			RingBuffer<T>* ringBuffer, ConsumerBarrier<T>* barrier, long sequence,
-			boost::posix_time::time_duration timeout) {
-		long availableSequence;
-		if ((availableSequence = ringBuffer.getCursor()) < sequence)
-		{
-			boost::unique_lock< boost::shared_mutex > lock(_mutex);
-			while ((availableSequence = ringBuffer.getCursor()) < sequence)
-			{
-				if (barrier.isAlerted())
-				{
-					// throw ALERT_EXCEPTION;
-					std::cerr << "BW ALERT ... " << std::endl;
-				}
-
-				//                        if (!consumerNotifyCondition.await(timeout, units))
-				//                        {
-				//                            break;
-				//                        }
-			}
-		}
-
-		if (0 != consumers.size())
-		{
-			while ((availableSequence =
-					getMinimumSequence(consumers)) < sequence)
-			{
-				if (barrier.isAlerted())
-				{
-					std::cerr << "BW ALERT ... " << std::endl;
-					//                  throw ALERT_EXCEPTION;
-				}
-			}
-		}
-
-		return availableSequence;
-	}
-
-	void signalAll()
-	{
-		//boost::unique_lock< boost::shared_mutex > lock(lock);
-		//                consumerNotifyCondition.signalAll();
-
-	}
-}; // BlockingStrategy
-
-/**
  * Yielding strategy that uses a Thread.yield() for {@link Consumer}s waiting
  * on a barrier.
  *
@@ -625,7 +546,7 @@ public:
 //			std::cout << "YW: no consumers" << std::endl;
 			while ((availableSequence = ringBuffer->getCursor()) < sequence) {
 				if (barrier->isAlerted()) {
-					//throw ALERT_EXCEPTION;
+					throw AlertException::Alert();
 					std::cerr << "YW ALERT ... " << std::endl;
 					break;
 				}
@@ -638,6 +559,7 @@ public:
 					< sequence) {
 				if (barrier->isAlerted()) {
 					//throw ALERT_EXCEPTION;
+					throw AlertException::Alert();
 					std::cerr << "YW ALERT ... " << std::endl;
 				}
 				boost::this_thread::yield();
@@ -659,9 +581,7 @@ public:
 		if (0 == consumers.size()) {
 			while ((availableSequence = ringBuffer->getCursor()) < sequence) {
 				if (barrier->isAlerted()) {
-					//throw ALERT_EXCEPTION;
-					std::cerr << " YW ALERT ... " << std::endl;
-
+					throw AlertException::Alert();
 				}
 
 				boost::this_thread::yield();
@@ -1059,7 +979,7 @@ public:
 	 */
 	RingBuffer(const int size,
 			ClaimStrategy* claimStrategy ,//= new MultiThreadedStrategy(),
-			WaitStrategy<T>* waitStrategy = new BlockingWait<T>() )
+			WaitStrategy<T>* waitStrategy = new YieldingWait<T>() )
 		: //_cursor(INITIAL_CURSOR_VALUE) ,
 		  _ringModMask(ceilingNextPowerOfTwo(size)-1),
 		  _entries(_ringModMask+1),
