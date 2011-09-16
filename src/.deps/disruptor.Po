@@ -1,90 +1,34 @@
-disruptor.o: disruptor.cpp /usr/include/c++/4.4/iostream \
+disruptor.o: disruptor.cpp disruptor.hpp \
+ /home/tingarg/dev/tbb/include/tbb/atomic.h /usr/include/c++/4.4/cstddef \
  /usr/include/c++/4.4/x86_64-linux-gnu/bits/c++config.h \
  /usr/include/c++/4.4/x86_64-linux-gnu/bits/os_defines.h \
  /usr/include/features.h /usr/include/bits/predefs.h \
  /usr/include/sys/cdefs.h /usr/include/bits/wordsize.h \
  /usr/include/gnu/stubs.h /usr/include/gnu/stubs-64.h \
  /usr/include/c++/4.4/x86_64-linux-gnu/bits/cpu_defines.h \
- /usr/include/c++/4.4/ostream /usr/include/c++/4.4/ios \
- /usr/include/c++/4.4/iosfwd /usr/include/c++/4.4/bits/stringfwd.h \
- /usr/include/c++/4.4/bits/postypes.h /usr/include/c++/4.4/cwchar \
- /usr/include/c++/4.4/cstddef \
  /usr/lib/gcc/x86_64-linux-gnu/4.4.3/include/stddef.h \
- /usr/include/wchar.h /usr/include/stdio.h \
- /usr/lib/gcc/x86_64-linux-gnu/4.4.3/include/stdarg.h \
- /usr/include/bits/wchar.h /usr/include/xlocale.h \
- /usr/include/bits/wchar2.h /usr/include/c++/4.4/exception \
- /usr/include/c++/4.4/bits/char_traits.h \
- /usr/include/c++/4.4/bits/stl_algobase.h \
- /usr/include/c++/4.4/bits/functexcept.h \
- /usr/include/c++/4.4/exception_defines.h \
- /usr/include/c++/4.4/bits/cpp_type_traits.h \
- /usr/include/c++/4.4/ext/type_traits.h \
- /usr/include/c++/4.4/ext/numeric_traits.h \
- /usr/include/c++/4.4/bits/stl_pair.h /usr/include/c++/4.4/bits/move.h \
- /usr/include/c++/4.4/bits/concept_check.h \
- /usr/include/c++/4.4/bits/stl_iterator_base_types.h \
- /usr/include/c++/4.4/bits/stl_iterator_base_funcs.h \
- /usr/include/c++/4.4/bits/stl_iterator.h \
- /usr/include/c++/4.4/debug/debug.h /usr/include/c++/4.4/bits/localefwd.h \
- /usr/include/c++/4.4/x86_64-linux-gnu/bits/c++locale.h \
- /usr/include/c++/4.4/clocale /usr/include/locale.h \
- /usr/include/bits/locale.h /usr/include/c++/4.4/cctype \
- /usr/include/ctype.h /usr/include/bits/types.h \
- /usr/include/bits/typesizes.h /usr/include/endian.h \
- /usr/include/bits/endian.h /usr/include/bits/byteswap.h \
- /usr/include/c++/4.4/bits/ios_base.h \
- /usr/include/c++/4.4/ext/atomicity.h \
- /usr/include/c++/4.4/x86_64-linux-gnu/bits/gthr.h \
- /usr/include/c++/4.4/x86_64-linux-gnu/bits/gthr-default.h \
- /usr/include/pthread.h /usr/include/sched.h /usr/include/time.h \
- /usr/include/bits/sched.h /usr/include/bits/time.h /usr/include/signal.h \
- /usr/include/bits/sigset.h /usr/include/bits/pthreadtypes.h \
- /usr/include/bits/setjmp.h /usr/include/unistd.h \
- /usr/include/bits/posix_opt.h /usr/include/bits/environments.h \
- /usr/include/bits/confname.h /usr/include/getopt.h \
- /usr/include/bits/unistd.h \
- /usr/include/c++/4.4/x86_64-linux-gnu/bits/atomic_word.h \
- /usr/include/c++/4.4/bits/locale_classes.h /usr/include/c++/4.4/string \
- /usr/include/c++/4.4/bits/allocator.h \
- /usr/include/c++/4.4/x86_64-linux-gnu/bits/c++allocator.h \
- /usr/include/c++/4.4/ext/new_allocator.h /usr/include/c++/4.4/new \
- /usr/include/c++/4.4/bits/ostream_insert.h \
- /usr/include/c++/4.4/cxxabi-forced.h \
- /usr/include/c++/4.4/bits/stl_function.h \
- /usr/include/c++/4.4/backward/binders.h \
- /usr/include/c++/4.4/bits/basic_string.h \
- /usr/include/c++/4.4/initializer_list \
- /usr/include/c++/4.4/bits/basic_string.tcc \
- /usr/include/c++/4.4/bits/locale_classes.tcc \
- /usr/include/c++/4.4/streambuf /usr/include/c++/4.4/bits/streambuf.tcc \
- /usr/include/c++/4.4/bits/basic_ios.h \
- /usr/include/c++/4.4/bits/locale_facets.h /usr/include/c++/4.4/cwctype \
- /usr/include/wctype.h \
- /usr/include/c++/4.4/x86_64-linux-gnu/bits/ctype_base.h \
- /usr/include/c++/4.4/bits/streambuf_iterator.h \
- /usr/include/c++/4.4/x86_64-linux-gnu/bits/ctype_inline.h \
- /usr/include/c++/4.4/bits/locale_facets.tcc \
- /usr/include/c++/4.4/bits/basic_ios.tcc \
- /usr/include/c++/4.4/bits/ostream.tcc /usr/include/c++/4.4/istream \
- /usr/include/c++/4.4/bits/istream.tcc disruptor.hpp \
- /usr/include/c++/4.4/climits \
+ /home/tingarg/dev/tbb/include/tbb/tbb_stddef.h \
+ /home/tingarg/dev/tbb/include/tbb/tbb_config.h /usr/include/stdint.h \
+ /usr/include/bits/wchar.h \
+ /home/tingarg/dev/tbb/include/tbb/tbb_machine.h \
+ /home/tingarg/dev/tbb/include/tbb/machine/linux_intel64.h \
+ /usr/include/unistd.h /usr/include/bits/posix_opt.h \
+ /usr/include/bits/environments.h /usr/include/bits/types.h \
+ /usr/include/bits/typesizes.h /usr/include/bits/confname.h \
+ /usr/include/getopt.h /usr/include/bits/unistd.h \
+ /home/tingarg/dev/tbb/include/tbb/machine/linux_common.h \
+ /usr/include/sched.h /usr/include/time.h /usr/include/bits/sched.h \
+ /usr/include/sys/syscall.h /usr/include/asm/unistd.h \
+ /usr/include/asm/unistd_64.h /usr/include/bits/syscall.h \
  /usr/lib/gcc/x86_64-linux-gnu/4.4.3/include-fixed/limits.h \
  /usr/lib/gcc/x86_64-linux-gnu/4.4.3/include-fixed/syslimits.h \
  /usr/include/limits.h /usr/include/bits/posix1_lim.h \
  /usr/include/bits/local_lim.h /usr/include/linux/limits.h \
  /usr/include/bits/posix2_lim.h /usr/include/bits/xopen_lim.h \
- /usr/include/bits/stdio_lim.h /home/tingarg/dev/tbb/include/tbb/atomic.h \
- /home/tingarg/dev/tbb/include/tbb/tbb_stddef.h \
- /home/tingarg/dev/tbb/include/tbb/tbb_config.h /usr/include/stdint.h \
- /home/tingarg/dev/tbb/include/tbb/tbb_machine.h \
- /home/tingarg/dev/tbb/include/tbb/machine/linux_intel64.h \
- /home/tingarg/dev/tbb/include/tbb/machine/linux_common.h \
- /usr/include/sys/syscall.h /usr/include/asm/unistd.h \
- /usr/include/asm/unistd_64.h /usr/include/bits/syscall.h \
- /usr/include/errno.h /usr/include/bits/errno.h \
- /usr/include/linux/errno.h /usr/include/asm/errno.h \
- /usr/include/asm-generic/errno.h /usr/include/asm-generic/errno-base.h \
+ /usr/include/bits/stdio_lim.h /usr/include/errno.h \
+ /usr/include/bits/errno.h /usr/include/linux/errno.h \
+ /usr/include/asm/errno.h /usr/include/asm-generic/errno.h \
+ /usr/include/asm-generic/errno-base.h \
  /usr/local/include/boost/thread/locks.hpp \
  /usr/local/include/boost/thread/detail/config.hpp \
  /usr/local/include/boost/config.hpp \
@@ -94,14 +38,20 @@ disruptor.o: disruptor.cpp /usr/include/c++/4.4/iostream \
  /usr/local/include/boost/config/select_stdlib_config.hpp \
  /usr/local/include/boost/config/no_tr1/utility.hpp \
  /usr/include/c++/4.4/utility /usr/include/c++/4.4/bits/stl_relops.h \
+ /usr/include/c++/4.4/bits/stl_pair.h /usr/include/c++/4.4/bits/move.h \
+ /usr/include/c++/4.4/bits/concept_check.h \
  /usr/local/include/boost/config/stdlib/libstdcpp3.hpp \
  /usr/local/include/boost/config/select_platform_config.hpp \
  /usr/local/include/boost/config/platform/linux.hpp \
  /usr/include/c++/4.4/cstdlib /usr/include/stdlib.h \
  /usr/include/bits/waitflags.h /usr/include/bits/waitstatus.h \
+ /usr/include/endian.h /usr/include/bits/endian.h \
+ /usr/include/bits/byteswap.h /usr/include/xlocale.h \
  /usr/include/sys/types.h /usr/include/sys/select.h \
- /usr/include/bits/select.h /usr/include/sys/sysmacros.h \
- /usr/include/alloca.h /usr/include/bits/stdlib.h \
+ /usr/include/bits/select.h /usr/include/bits/sigset.h \
+ /usr/include/bits/time.h /usr/include/sys/sysmacros.h \
+ /usr/include/bits/pthreadtypes.h /usr/include/alloca.h \
+ /usr/include/bits/stdlib.h \
  /usr/local/include/boost/config/posix_features.hpp \
  /usr/local/include/boost/config/suffix.hpp \
  /usr/local/include/boost/detail/workaround.hpp \
@@ -109,6 +59,40 @@ disruptor.o: disruptor.cpp /usr/include/c++/4.4/iostream \
  /usr/local/include/boost/config/requires_threads.hpp \
  /usr/local/include/boost/config/auto_link.hpp \
  /usr/local/include/boost/thread/exceptions.hpp \
+ /usr/include/c++/4.4/string /usr/include/c++/4.4/bits/stringfwd.h \
+ /usr/include/c++/4.4/bits/char_traits.h \
+ /usr/include/c++/4.4/bits/stl_algobase.h \
+ /usr/include/c++/4.4/bits/functexcept.h \
+ /usr/include/c++/4.4/exception_defines.h \
+ /usr/include/c++/4.4/bits/cpp_type_traits.h \
+ /usr/include/c++/4.4/ext/type_traits.h \
+ /usr/include/c++/4.4/ext/numeric_traits.h \
+ /usr/include/c++/4.4/bits/stl_iterator_base_types.h \
+ /usr/include/c++/4.4/bits/stl_iterator_base_funcs.h \
+ /usr/include/c++/4.4/bits/stl_iterator.h \
+ /usr/include/c++/4.4/debug/debug.h /usr/include/c++/4.4/bits/postypes.h \
+ /usr/include/c++/4.4/cwchar /usr/include/wchar.h /usr/include/stdio.h \
+ /usr/lib/gcc/x86_64-linux-gnu/4.4.3/include/stdarg.h \
+ /usr/include/bits/wchar2.h /usr/include/c++/4.4/bits/allocator.h \
+ /usr/include/c++/4.4/x86_64-linux-gnu/bits/c++allocator.h \
+ /usr/include/c++/4.4/ext/new_allocator.h /usr/include/c++/4.4/new \
+ /usr/include/c++/4.4/exception /usr/include/c++/4.4/bits/localefwd.h \
+ /usr/include/c++/4.4/x86_64-linux-gnu/bits/c++locale.h \
+ /usr/include/c++/4.4/clocale /usr/include/locale.h \
+ /usr/include/bits/locale.h /usr/include/c++/4.4/iosfwd \
+ /usr/include/c++/4.4/cctype /usr/include/ctype.h \
+ /usr/include/c++/4.4/bits/ostream_insert.h \
+ /usr/include/c++/4.4/cxxabi-forced.h \
+ /usr/include/c++/4.4/bits/stl_function.h \
+ /usr/include/c++/4.4/backward/binders.h \
+ /usr/include/c++/4.4/bits/basic_string.h \
+ /usr/include/c++/4.4/ext/atomicity.h \
+ /usr/include/c++/4.4/x86_64-linux-gnu/bits/gthr.h \
+ /usr/include/c++/4.4/x86_64-linux-gnu/bits/gthr-default.h \
+ /usr/include/pthread.h /usr/include/signal.h /usr/include/bits/setjmp.h \
+ /usr/include/c++/4.4/x86_64-linux-gnu/bits/atomic_word.h \
+ /usr/include/c++/4.4/initializer_list \
+ /usr/include/c++/4.4/bits/basic_string.tcc \
  /usr/include/c++/4.4/stdexcept \
  /usr/local/include/boost/config/abi_prefix.hpp \
  /usr/local/include/boost/config/abi_suffix.hpp \
@@ -190,7 +174,21 @@ disruptor.o: disruptor.cpp /usr/include/c++/4.4/iostream \
  /usr/include/c++/4.4/bits/stl_tempbuf.h \
  /usr/include/c++/4.4/bits/stl_construct.h \
  /usr/include/c++/4.4/bits/stl_uninitialized.h \
- /usr/include/c++/4.4/iterator \
+ /usr/include/c++/4.4/iterator /usr/include/c++/4.4/ostream \
+ /usr/include/c++/4.4/ios /usr/include/c++/4.4/bits/ios_base.h \
+ /usr/include/c++/4.4/bits/locale_classes.h \
+ /usr/include/c++/4.4/bits/locale_classes.tcc \
+ /usr/include/c++/4.4/streambuf /usr/include/c++/4.4/bits/streambuf.tcc \
+ /usr/include/c++/4.4/bits/basic_ios.h \
+ /usr/include/c++/4.4/bits/locale_facets.h /usr/include/c++/4.4/cwctype \
+ /usr/include/wctype.h \
+ /usr/include/c++/4.4/x86_64-linux-gnu/bits/ctype_base.h \
+ /usr/include/c++/4.4/bits/streambuf_iterator.h \
+ /usr/include/c++/4.4/x86_64-linux-gnu/bits/ctype_inline.h \
+ /usr/include/c++/4.4/bits/locale_facets.tcc \
+ /usr/include/c++/4.4/bits/basic_ios.tcc \
+ /usr/include/c++/4.4/bits/ostream.tcc /usr/include/c++/4.4/istream \
+ /usr/include/c++/4.4/bits/istream.tcc \
  /usr/include/c++/4.4/bits/stream_iterator.h \
  /usr/local/include/boost/thread/thread_time.hpp \
  /usr/local/include/boost/date_time/time_clock.hpp \
@@ -209,6 +207,7 @@ disruptor.o: disruptor.cpp /usr/include/c++/4.4/iostream \
  /usr/include/c++/4.4/bits/stl_raw_storage_iter.h \
  /usr/include/c++/4.4/backward/auto_ptr.h \
  /usr/local/include/boost/assert.hpp /usr/include/assert.h \
+ /usr/include/c++/4.4/iostream \
  /usr/local/include/boost/checked_delete.hpp \
  /usr/local/include/boost/smart_ptr/detail/shared_count.hpp \
  /usr/local/include/boost/smart_ptr/bad_weak_ptr.hpp \
@@ -604,7 +603,7 @@ disruptor.o: disruptor.cpp /usr/include/c++/4.4/iostream \
  /usr/local/include/boost/date_time/period_formatter.hpp \
  /usr/local/include/boost/date_time/period_parser.hpp \
  /usr/local/include/boost/date_time/string_parse_tree.hpp \
- /usr/local/include/boost/lexical_cast.hpp \
+ /usr/local/include/boost/lexical_cast.hpp /usr/include/c++/4.4/climits \
  /usr/local/include/boost/type_traits/make_unsigned.hpp \
  /usr/local/include/boost/type_traits/is_signed.hpp \
  /usr/local/include/boost/type_traits/is_unsigned.hpp \
@@ -638,7 +637,11 @@ disruptor.o: disruptor.cpp /usr/include/c++/4.4/iostream \
  /usr/local/include/boost/algorithm/string/erase.hpp \
  /usr/local/include/boost/date_time/posix_time/time_parsers.hpp
 
-/usr/include/c++/4.4/iostream:
+disruptor.hpp:
+
+/home/tingarg/dev/tbb/include/tbb/atomic.h:
+
+/usr/include/c++/4.4/cstddef:
 
 /usr/include/c++/4.4/x86_64-linux-gnu/bits/c++config.h:
 
@@ -658,113 +661,19 @@ disruptor.o: disruptor.cpp /usr/include/c++/4.4/iostream \
 
 /usr/include/c++/4.4/x86_64-linux-gnu/bits/cpu_defines.h:
 
-/usr/include/c++/4.4/ostream:
-
-/usr/include/c++/4.4/ios:
-
-/usr/include/c++/4.4/iosfwd:
-
-/usr/include/c++/4.4/bits/stringfwd.h:
-
-/usr/include/c++/4.4/bits/postypes.h:
-
-/usr/include/c++/4.4/cwchar:
-
-/usr/include/c++/4.4/cstddef:
-
 /usr/lib/gcc/x86_64-linux-gnu/4.4.3/include/stddef.h:
 
-/usr/include/wchar.h:
+/home/tingarg/dev/tbb/include/tbb/tbb_stddef.h:
 
-/usr/include/stdio.h:
+/home/tingarg/dev/tbb/include/tbb/tbb_config.h:
 
-/usr/lib/gcc/x86_64-linux-gnu/4.4.3/include/stdarg.h:
+/usr/include/stdint.h:
 
 /usr/include/bits/wchar.h:
 
-/usr/include/xlocale.h:
+/home/tingarg/dev/tbb/include/tbb/tbb_machine.h:
 
-/usr/include/bits/wchar2.h:
-
-/usr/include/c++/4.4/exception:
-
-/usr/include/c++/4.4/bits/char_traits.h:
-
-/usr/include/c++/4.4/bits/stl_algobase.h:
-
-/usr/include/c++/4.4/bits/functexcept.h:
-
-/usr/include/c++/4.4/exception_defines.h:
-
-/usr/include/c++/4.4/bits/cpp_type_traits.h:
-
-/usr/include/c++/4.4/ext/type_traits.h:
-
-/usr/include/c++/4.4/ext/numeric_traits.h:
-
-/usr/include/c++/4.4/bits/stl_pair.h:
-
-/usr/include/c++/4.4/bits/move.h:
-
-/usr/include/c++/4.4/bits/concept_check.h:
-
-/usr/include/c++/4.4/bits/stl_iterator_base_types.h:
-
-/usr/include/c++/4.4/bits/stl_iterator_base_funcs.h:
-
-/usr/include/c++/4.4/bits/stl_iterator.h:
-
-/usr/include/c++/4.4/debug/debug.h:
-
-/usr/include/c++/4.4/bits/localefwd.h:
-
-/usr/include/c++/4.4/x86_64-linux-gnu/bits/c++locale.h:
-
-/usr/include/c++/4.4/clocale:
-
-/usr/include/locale.h:
-
-/usr/include/bits/locale.h:
-
-/usr/include/c++/4.4/cctype:
-
-/usr/include/ctype.h:
-
-/usr/include/bits/types.h:
-
-/usr/include/bits/typesizes.h:
-
-/usr/include/endian.h:
-
-/usr/include/bits/endian.h:
-
-/usr/include/bits/byteswap.h:
-
-/usr/include/c++/4.4/bits/ios_base.h:
-
-/usr/include/c++/4.4/ext/atomicity.h:
-
-/usr/include/c++/4.4/x86_64-linux-gnu/bits/gthr.h:
-
-/usr/include/c++/4.4/x86_64-linux-gnu/bits/gthr-default.h:
-
-/usr/include/pthread.h:
-
-/usr/include/sched.h:
-
-/usr/include/time.h:
-
-/usr/include/bits/sched.h:
-
-/usr/include/bits/time.h:
-
-/usr/include/signal.h:
-
-/usr/include/bits/sigset.h:
-
-/usr/include/bits/pthreadtypes.h:
-
-/usr/include/bits/setjmp.h:
+/home/tingarg/dev/tbb/include/tbb/machine/linux_intel64.h:
 
 /usr/include/unistd.h:
 
@@ -772,73 +681,31 @@ disruptor.o: disruptor.cpp /usr/include/c++/4.4/iostream \
 
 /usr/include/bits/environments.h:
 
+/usr/include/bits/types.h:
+
+/usr/include/bits/typesizes.h:
+
 /usr/include/bits/confname.h:
 
 /usr/include/getopt.h:
 
 /usr/include/bits/unistd.h:
 
-/usr/include/c++/4.4/x86_64-linux-gnu/bits/atomic_word.h:
+/home/tingarg/dev/tbb/include/tbb/machine/linux_common.h:
 
-/usr/include/c++/4.4/bits/locale_classes.h:
+/usr/include/sched.h:
 
-/usr/include/c++/4.4/string:
+/usr/include/time.h:
 
-/usr/include/c++/4.4/bits/allocator.h:
+/usr/include/bits/sched.h:
 
-/usr/include/c++/4.4/x86_64-linux-gnu/bits/c++allocator.h:
+/usr/include/sys/syscall.h:
 
-/usr/include/c++/4.4/ext/new_allocator.h:
+/usr/include/asm/unistd.h:
 
-/usr/include/c++/4.4/new:
+/usr/include/asm/unistd_64.h:
 
-/usr/include/c++/4.4/bits/ostream_insert.h:
-
-/usr/include/c++/4.4/cxxabi-forced.h:
-
-/usr/include/c++/4.4/bits/stl_function.h:
-
-/usr/include/c++/4.4/backward/binders.h:
-
-/usr/include/c++/4.4/bits/basic_string.h:
-
-/usr/include/c++/4.4/initializer_list:
-
-/usr/include/c++/4.4/bits/basic_string.tcc:
-
-/usr/include/c++/4.4/bits/locale_classes.tcc:
-
-/usr/include/c++/4.4/streambuf:
-
-/usr/include/c++/4.4/bits/streambuf.tcc:
-
-/usr/include/c++/4.4/bits/basic_ios.h:
-
-/usr/include/c++/4.4/bits/locale_facets.h:
-
-/usr/include/c++/4.4/cwctype:
-
-/usr/include/wctype.h:
-
-/usr/include/c++/4.4/x86_64-linux-gnu/bits/ctype_base.h:
-
-/usr/include/c++/4.4/bits/streambuf_iterator.h:
-
-/usr/include/c++/4.4/x86_64-linux-gnu/bits/ctype_inline.h:
-
-/usr/include/c++/4.4/bits/locale_facets.tcc:
-
-/usr/include/c++/4.4/bits/basic_ios.tcc:
-
-/usr/include/c++/4.4/bits/ostream.tcc:
-
-/usr/include/c++/4.4/istream:
-
-/usr/include/c++/4.4/bits/istream.tcc:
-
-disruptor.hpp:
-
-/usr/include/c++/4.4/climits:
+/usr/include/bits/syscall.h:
 
 /usr/lib/gcc/x86_64-linux-gnu/4.4.3/include-fixed/limits.h:
 
@@ -857,28 +724,6 @@ disruptor.hpp:
 /usr/include/bits/xopen_lim.h:
 
 /usr/include/bits/stdio_lim.h:
-
-/home/tingarg/dev/tbb/include/tbb/atomic.h:
-
-/home/tingarg/dev/tbb/include/tbb/tbb_stddef.h:
-
-/home/tingarg/dev/tbb/include/tbb/tbb_config.h:
-
-/usr/include/stdint.h:
-
-/home/tingarg/dev/tbb/include/tbb/tbb_machine.h:
-
-/home/tingarg/dev/tbb/include/tbb/machine/linux_intel64.h:
-
-/home/tingarg/dev/tbb/include/tbb/machine/linux_common.h:
-
-/usr/include/sys/syscall.h:
-
-/usr/include/asm/unistd.h:
-
-/usr/include/asm/unistd_64.h:
-
-/usr/include/bits/syscall.h:
 
 /usr/include/errno.h:
 
@@ -912,6 +757,12 @@ disruptor.hpp:
 
 /usr/include/c++/4.4/bits/stl_relops.h:
 
+/usr/include/c++/4.4/bits/stl_pair.h:
+
+/usr/include/c++/4.4/bits/move.h:
+
+/usr/include/c++/4.4/bits/concept_check.h:
+
 /usr/local/include/boost/config/stdlib/libstdcpp3.hpp:
 
 /usr/local/include/boost/config/select_platform_config.hpp:
@@ -926,13 +777,27 @@ disruptor.hpp:
 
 /usr/include/bits/waitstatus.h:
 
+/usr/include/endian.h:
+
+/usr/include/bits/endian.h:
+
+/usr/include/bits/byteswap.h:
+
+/usr/include/xlocale.h:
+
 /usr/include/sys/types.h:
 
 /usr/include/sys/select.h:
 
 /usr/include/bits/select.h:
 
+/usr/include/bits/sigset.h:
+
+/usr/include/bits/time.h:
+
 /usr/include/sys/sysmacros.h:
+
+/usr/include/bits/pthreadtypes.h:
 
 /usr/include/alloca.h:
 
@@ -951,6 +816,98 @@ disruptor.hpp:
 /usr/local/include/boost/config/auto_link.hpp:
 
 /usr/local/include/boost/thread/exceptions.hpp:
+
+/usr/include/c++/4.4/string:
+
+/usr/include/c++/4.4/bits/stringfwd.h:
+
+/usr/include/c++/4.4/bits/char_traits.h:
+
+/usr/include/c++/4.4/bits/stl_algobase.h:
+
+/usr/include/c++/4.4/bits/functexcept.h:
+
+/usr/include/c++/4.4/exception_defines.h:
+
+/usr/include/c++/4.4/bits/cpp_type_traits.h:
+
+/usr/include/c++/4.4/ext/type_traits.h:
+
+/usr/include/c++/4.4/ext/numeric_traits.h:
+
+/usr/include/c++/4.4/bits/stl_iterator_base_types.h:
+
+/usr/include/c++/4.4/bits/stl_iterator_base_funcs.h:
+
+/usr/include/c++/4.4/bits/stl_iterator.h:
+
+/usr/include/c++/4.4/debug/debug.h:
+
+/usr/include/c++/4.4/bits/postypes.h:
+
+/usr/include/c++/4.4/cwchar:
+
+/usr/include/wchar.h:
+
+/usr/include/stdio.h:
+
+/usr/lib/gcc/x86_64-linux-gnu/4.4.3/include/stdarg.h:
+
+/usr/include/bits/wchar2.h:
+
+/usr/include/c++/4.4/bits/allocator.h:
+
+/usr/include/c++/4.4/x86_64-linux-gnu/bits/c++allocator.h:
+
+/usr/include/c++/4.4/ext/new_allocator.h:
+
+/usr/include/c++/4.4/new:
+
+/usr/include/c++/4.4/exception:
+
+/usr/include/c++/4.4/bits/localefwd.h:
+
+/usr/include/c++/4.4/x86_64-linux-gnu/bits/c++locale.h:
+
+/usr/include/c++/4.4/clocale:
+
+/usr/include/locale.h:
+
+/usr/include/bits/locale.h:
+
+/usr/include/c++/4.4/iosfwd:
+
+/usr/include/c++/4.4/cctype:
+
+/usr/include/ctype.h:
+
+/usr/include/c++/4.4/bits/ostream_insert.h:
+
+/usr/include/c++/4.4/cxxabi-forced.h:
+
+/usr/include/c++/4.4/bits/stl_function.h:
+
+/usr/include/c++/4.4/backward/binders.h:
+
+/usr/include/c++/4.4/bits/basic_string.h:
+
+/usr/include/c++/4.4/ext/atomicity.h:
+
+/usr/include/c++/4.4/x86_64-linux-gnu/bits/gthr.h:
+
+/usr/include/c++/4.4/x86_64-linux-gnu/bits/gthr-default.h:
+
+/usr/include/pthread.h:
+
+/usr/include/signal.h:
+
+/usr/include/bits/setjmp.h:
+
+/usr/include/c++/4.4/x86_64-linux-gnu/bits/atomic_word.h:
+
+/usr/include/c++/4.4/initializer_list:
+
+/usr/include/c++/4.4/bits/basic_string.tcc:
 
 /usr/include/c++/4.4/stdexcept:
 
@@ -1118,6 +1075,44 @@ disruptor.hpp:
 
 /usr/include/c++/4.4/iterator:
 
+/usr/include/c++/4.4/ostream:
+
+/usr/include/c++/4.4/ios:
+
+/usr/include/c++/4.4/bits/ios_base.h:
+
+/usr/include/c++/4.4/bits/locale_classes.h:
+
+/usr/include/c++/4.4/bits/locale_classes.tcc:
+
+/usr/include/c++/4.4/streambuf:
+
+/usr/include/c++/4.4/bits/streambuf.tcc:
+
+/usr/include/c++/4.4/bits/basic_ios.h:
+
+/usr/include/c++/4.4/bits/locale_facets.h:
+
+/usr/include/c++/4.4/cwctype:
+
+/usr/include/wctype.h:
+
+/usr/include/c++/4.4/x86_64-linux-gnu/bits/ctype_base.h:
+
+/usr/include/c++/4.4/bits/streambuf_iterator.h:
+
+/usr/include/c++/4.4/x86_64-linux-gnu/bits/ctype_inline.h:
+
+/usr/include/c++/4.4/bits/locale_facets.tcc:
+
+/usr/include/c++/4.4/bits/basic_ios.tcc:
+
+/usr/include/c++/4.4/bits/ostream.tcc:
+
+/usr/include/c++/4.4/istream:
+
+/usr/include/c++/4.4/bits/istream.tcc:
+
 /usr/include/c++/4.4/bits/stream_iterator.h:
 
 /usr/local/include/boost/thread/thread_time.hpp:
@@ -1159,6 +1154,8 @@ disruptor.hpp:
 /usr/local/include/boost/assert.hpp:
 
 /usr/include/assert.h:
+
+/usr/include/c++/4.4/iostream:
 
 /usr/local/include/boost/checked_delete.hpp:
 
@@ -1983,6 +1980,8 @@ disruptor.hpp:
 /usr/local/include/boost/date_time/string_parse_tree.hpp:
 
 /usr/local/include/boost/lexical_cast.hpp:
+
+/usr/include/c++/4.4/climits:
 
 /usr/local/include/boost/type_traits/make_unsigned.hpp:
 

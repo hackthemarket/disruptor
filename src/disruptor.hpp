@@ -18,47 +18,8 @@ namespace disruptor {
 
 const static long INITIAL_CURSOR_VALUE = -1L;
 
-/**
- *             ---- Hacked straight out of Java library. -----
- *
- * Returns the number of zero bits preceding the highest-order
- * ("leftmost") one-bit in the two's complement binary representation
- * of the specified <tt>int</tt> value.  Returns 32 if the
- * specified value has no one-bits in its two's complement representation,
- * in other words if it is equal to zero.
- *
- * <p>Note that this method is closely related to the logarithm base 2.
- * For all positive <tt>int</tt> values x:
- * <ul>
- * <li>floor(log<sub>2</sub>(x)) = <tt>31 - numberOfLeadingZeros(x)</tt>
- * <li>ceil(log<sub>2</sub>(x)) = <tt>32 - numberOfLeadingZeros(x - 1)</tt>
- * </ul>
- *
- * @return the number of zero bits preceding the highest-order
- *     ("leftmost") one-bit in the two's complement binary representation
- *     of the specified <tt>int</tt> value, or 32 if the value
- *     is equal to zero.
- * @since 1.5
- */
-inline int numberOfLeadingZeros(int i) {
-    // HD, Figure 5-6
-    if (i == 0) return 32;
-    int n = 1;
-    if (i >> 16 == 0) { n += 16; i <<= 16; }
-    if (i >> 24 == 0) { n +=  8; i <<=  8; }
-    if (i >> 28 == 0) { n +=  4; i <<=  4; }
-    if (i >> 30 == 0) { n +=  2; i <<=  2; }
-    n -= i >> 31;
-    return n;
-}
+int numberOfLeadingZeros(int i);
 
-/**
-  * Calculate the next power of 2, greater than or equal to x.<p>
-  * From Hacker's Delight, Chapter 3, Harry S. Warren Jr.
-  *
-  * @param x Value to round up
-  * @return The next power of 2 from x inclusive
-  */
 inline int ceilingNextPowerOfTwo(const int x) {
      return 1 << (32 - numberOfLeadingZeros(x - 1));
 }
@@ -66,57 +27,104 @@ inline int ceilingNextPowerOfTwo(const int x) {
 /**
  * Used to alert consumers waiting at a {@link ConsumerBarrier} of status changes.
  */
-class AlertException : public std::exception {
-private:
-  static const AlertException * _Alert;
-  static boost::shared_mutex _Mutex;
-
-public:
-
-  static const AlertException & Alert() {
-	  if (_Alert==NULL) {
-		  boost::unique_lock< boost::shared_mutex > lock(_Mutex);
-		  _Alert = new AlertException();
-	  }
-	  return *_Alert;
-  }
+struct AlertException : public std::exception  {
+  const static AlertException  Alert;
 }; // AlertException
 
-
-class AbstractEntry {
-private:
-    long _sequence;
-
-public:
-
-    /**Get the sequence number assigned to this item in the series.    */
-    long getSequence () const { return _sequence; }
-
-    /**
-	 * Explicitly set the sequence number for this Entry and a CommitCallback
-	 * for indicating when the producer is finished with assigning data
-	 * for exchange.     */
-    void setSequence(const long sequence) { _sequence = sequence; }
-
-}; // AbstractEntry
-
-
-inline std::ostream& operator<<(std::ostream& os, const AbstractEntry& entry) {
-	os << "AbstractEntry#" << entry.getSequence();
-	return os;
-}
+typedef tbb::atomic<long> PaddedAtomicLong;// TODO: pad!
 
 /**
- * EntryConsumers waitFor {@link AbstractEntry}s to become available for
- * consumption from the {@link RingBuffer}
+ * Cache line padded sequence counter.
+ *
+ * Can be used across threads without worrying about false sharing if a
+ * located adjacent to another counter in memory.
  */
-class Consumer {
+class Sequence {
+private:
+
+	PaddedAtomicLong _value ;
+
+public :
+    /**
+     * Default Constructor that uses an initial value of
+     * {@link Sequencer#INITIAL_CURSOR_VALUE}.
+     */
+    Sequence() { _value = INITIAL_CURSOR_VALUE ;  }
+
+    /**
+     * Construct a sequence counter that can be tracked across threads.
+     *
+     * @param initialValue for the counter.
+     */
+    Sequence(long initialValue)  {
+        set(initialValue);
+    }
+
+    long get() const { return _value; }
+
+    void set(long value) { _value = value;  }
+}; // Sequence
+
+/**
+ * Used to record the batch of sequences claimed via a {@link Sequencer}.
+ */
+class SequenceBatch  {
+private :
+    const int _size;
+    long _end;
+
+public :
+
+    /**
+     * Create a holder for tracking a batch of claimed sequences in a {@link Sequencer}
+     * @param size of the batch to claim.
+     */
+    SequenceBatch(int size) : _size(size), _end(INITIAL_CURSOR_VALUE)
+    {
+    }
+
+    /**
+     * Get the end sequence of a batch.
+     *
+     * @return the end sequence in a batch
+     */
+    long getEnd() { return _end; }
+
+    /**
+     * Set the end of the batch sequence.  To be used by the {@link Sequencer}.
+     *
+     * @param end sequence in the batch.
+     */
+    void setEnd(long end) { _end = end;  }
+
+    /**
+     * Get the size of the batch.
+     *
+     * @return the size of the batch.
+     */
+    int getSize() { return _size; }
+
+    /**
+     * Get the starting sequence for a batch.
+     *
+     * @return the starting sequence of a batch.
+     */
+    long getStart() { return _end - (_size - 1L); }
+};  // SequenceBatch
+
+/**
+ *  * EventProcessors waitFor events to become available for consumption from the {@link RingBuffer}
+ *
+ * An EventProcessor will be associated with a Thread for execution.
+ *
+ */
+class EventProcessor {
 public:
 	/**
 	 * Get the sequence up to which this Consumer has consumed
 	 * {@link AbstractEntry}s
 	 */
-    virtual long getSequence() const = 0;
+    virtual Sequence& getSequence() = 0;
 
     /**
      * Signal that this Consumer should stop when it has finished consuming at
@@ -130,73 +138,22 @@ public:
 
 }; // consumer
 
+
 /**
  * Get the minimum sequence from an array of {@link Consumer}s.
  *
  * @param consumers to compare.
  * @return the minimum sequence found or Long.MAX_VALUE if the array is empty.
  */
-inline long getMinimumSequence(const std::vector<Consumer*> consumers) {
+inline long getMinimumSequence(std::vector<EventProcessor*> consumers) {
     long minimum = LONG_MAX;
-    for (std::vector<Consumer*>::const_iterator it = consumers.begin();
+    for (std::vector<EventProcessor*>::const_iterator it = consumers.begin();
     			it!=consumers.end(); ++it) {
-    	const Consumer *consumer = *it;
-    	minimum = std::min(minimum, consumer->getSequence());
+    	EventProcessor *consumer = *it;
+    	minimum = std::min(minimum, consumer->getSequence().get());
     }
     return minimum;
 }
-
-/**
- * Used to record the batch of sequences claimed in a {@link RingBuffer}.
- */
-class SequenceBatch {
-private:
-	const int _size;
-	long _end;
-
-public:
-    /**
-     * Create a holder for tracking a batch of claimed sequences
-     * in a {@link RingBuffer}
-     * @param size of the batch to claim.
-     */
-    SequenceBatch(const int size) : _size(size), _end(INITIAL_CURSOR_VALUE)
-    {
-    //	std::cout << "SequenceBatch: " << _size << std::endl;
-    }
-
-    /**
-     * Get the end sequence of a batch.
-     *
-     * @return the end sequence in a batch
-     */
-    long getEnd() const { return _end; }
-
-    /**
-     * Set the end of the batch sequence.  To be used by
-     * the {@link ProducerBarrier}.
-     *
-     * @param end sequence in the batch.
-     */
-    void setEnd(const long end) {
-    	this->_end = end;
-    //	std::cout << "SequenceBatch: end = " << _end << std::endl;
-    }
-
-    /**
-     * Get the size of the batch.
-     *
-     * @return the size of the batch.
-     */
-    int getSize() const { return _size; }
-
-    /**
-     * Get the starting sequence for a batch.
-     *
-     * @return the starting sequence of a batch.
-     */
-    long getStart() const { return _end - (_size - 1L); }
-};
 
 /**
  * Abstraction for claiming {@link AbstractEntry}s in a {@link RingBuffer}
@@ -264,15 +221,8 @@ public:
  * the {@link RingBuffer}
  */
 template < typename T >
-class ConsumerBarrier {
+class SequenceBarrier {
 public:
-
-    /**
-     * Get the {@link AbstractEntry} for a given sequence from the
-     * underlying {@link RingBuffer}.
-     */
-    virtual T& getEntry(const long sequence) = 0;
-
     /**
      * Wait for the given sequence to be available for consumption.
      *
@@ -283,7 +233,7 @@ public:
      * @throws InterruptedException if the thread needs awaking on
      * a condition variable.
      */
-    virtual long waitFor(const long sequence) = 0;
+    virtual long waitFor(long sequence) = 0;
     //throws AlertException, InterruptedException;
 
     /**
@@ -299,8 +249,8 @@ public:
      * @throws InterruptedException if the thread needs awaking
      *  on a condition variable.
      */
-    virtual long waitFor(const long sequence,
-    		const boost::posix_time::time_duration timeout) = 0;
+    virtual long waitFor(long sequence,
+    	boost::posix_time::time_duration timeout) = 0;
     //throws AlertException, InterruptedException;
 
     /**
@@ -430,6 +380,7 @@ class SequenceTrackingHandler : public BatchHandler<T>
  * Callback handler for uncaught exceptions in the {@link AbstractEntry}
  * processing cycle of the {@link BatchConsumer}
  */
+template <typename event>
 class ExceptionHandler {
 public:
 
@@ -444,7 +395,7 @@ public:
      * @param ex the exception that propagated from the {@link BatchHandler}
      * @param currentEntry being processed when the exception occurred.
      */
-	virtual void handle(const void * ex, const AbstractEntry& currentEntry) = 0;
+	virtual void handle(const void * ex, long sequence, event e) = 0;
 
 };
 
@@ -454,15 +405,16 @@ public:
  * the exception as {@link Level}.SEVERE and re-throw it wrapped in a
  * {@link RuntimeException}
  */
-class FatalExceptionHandler : public ExceptionHandler {
+template <typename event>
+class FatalExceptionHandler : public ExceptionHandler<event> {
 
 public:
 
-    virtual void handle(const void * ex, const AbstractEntry& currentEntry) {
+    virtual void handle(const void * ex, long sequence, event e) {
         //logger.log(Level.SEVERE, "Exception processing: " + currentEntry, ex);
 
     	std::cerr << "Exception processing "
-    			<< currentEntry << std::endl;
+    			<< sequence << std::endl;
 //todo - exceptions
 //        throw new RuntimeException(ex);
     }
@@ -492,8 +444,8 @@ public:
      * @throws AlertException if the status of the Disruptor has changed.
      * @throws InterruptedException if the thread is interrupted.
      */
-	virtual long waitFor(std::vector<Consumer*>& consumers, RingBuffer<T>* ringBuffer,
-    		ConsumerBarrier<T>* barrier,  long sequence) = 0;
+	virtual long waitFor(std::vector<EventProcessor*>& consumers, RingBuffer<T>* ringBuffer,
+    		SequenceBarrier<T>* barrier,  long sequence) = 0;
 //	{
 //		std::cout << "WS: shouldn't be called!" << std::endl;
 //	};
@@ -513,8 +465,8 @@ public:
      * @throws AlertException if the status of the Disruptor has changed.
      * @throws InterruptedException if the thread is interrupted.
      */
-    virtual long waitFor(std::vector<Consumer*>& consumers,
-    		RingBuffer<T>* ringBuffer, ConsumerBarrier<T>* barrier, long sequence,
+    virtual long waitFor(std::vector<EventProcessor*>& consumers,
+    		RingBuffer<T>* ringBuffer, SequenceBarrier<T>* barrier, long sequence,
     		boost::posix_time::time_duration timeout) = 0;
 //    {
 //		std::cout << "WS-to: shouldn't be called!" << std::endl;
@@ -538,15 +490,15 @@ template <typename T>
 class YieldingWait: public WaitStrategy<T> {
 public:
 
-	long waitFor(std::vector<Consumer*>& consumers, RingBuffer<T>* ringBuffer,
-    		ConsumerBarrier<T>* barrier,  long sequence) {
+	long waitFor(std::vector<EventProcessor*>& consumers, RingBuffer<T>* ringBuffer,
+    		SequenceBarrier<T>* barrier,  long sequence) {
 		long availableSequence;
 
 		if (0 == consumers.size()) {
 //			std::cout << "YW: no consumers" << std::endl;
 			while ((availableSequence = ringBuffer->getCursor()) < sequence) {
 				if (barrier->isAlerted()) {
-					throw AlertException::Alert();
+					throw AlertException::Alert;
 					std::cerr << "YW ALERT ... " << std::endl;
 					break;
 				}
@@ -559,7 +511,7 @@ public:
 					< sequence) {
 				if (barrier->isAlerted()) {
 					//throw ALERT_EXCEPTION;
-					throw AlertException::Alert();
+					throw AlertException::Alert;
 					std::cerr << "YW ALERT ... " << std::endl;
 				}
 				boost::this_thread::yield();
@@ -570,8 +522,8 @@ public:
 		return availableSequence;
 	}
 
-	long waitFor(std::vector<Consumer*>& consumers, RingBuffer<T>* ringBuffer,
-			ConsumerBarrier<T>* barrier, long sequence,
+	long waitFor(std::vector<EventProcessor*>& consumers, RingBuffer<T>* ringBuffer,
+			SequenceBarrier<T>* barrier, long sequence,
 			boost::posix_time::time_duration timeout) {
 
         boost::posix_time::ptime start =
@@ -581,7 +533,7 @@ public:
 		if (0 == consumers.size()) {
 			while ((availableSequence = ringBuffer->getCursor()) < sequence) {
 				if (barrier->isAlerted()) {
-					throw AlertException::Alert();
+					throw AlertException::Alert;
 				}
 
 				boost::this_thread::yield();
@@ -599,6 +551,7 @@ public:
 				if (barrier->isAlerted()) {
 					//					throw ALERT_EXCEPTION;
 					std::cerr << "YW ALERT ... " << std::endl;
+					throw AlertException::Alert;
 				}
 				boost::this_thread::yield();
 				//			Thread.yield();
@@ -630,8 +583,8 @@ class BusySpinWait: public WaitStrategy<T> {
 
 public:
 
-	long waitFor(std::vector<Consumer*>& consumers, RingBuffer<T>* ringBuffer,
-			ConsumerBarrier<T>* barrier, long sequence) {
+	long waitFor(std::vector<EventProcessor*>& consumers, RingBuffer<T>* ringBuffer,
+			SequenceBarrier<T>* barrier, long sequence) {
 		long availableSequence;
 
 		if (0 == consumers.size())
@@ -662,8 +615,8 @@ public:
 		return availableSequence;
 	}
 
-	long waitFor(std::vector<Consumer*>& consumers,
-			RingBuffer<T>* ringBuffer, ConsumerBarrier<T>* barrier, long sequence,
+	long waitFor(std::vector<EventProcessor*>& consumers,
+			RingBuffer<T>* ringBuffer, SequenceBarrier<T>* barrier, long sequence,
 			boost::posix_time::time_duration timeout) {
 		const boost::posix_time::ptime currentTime();//System.currentTimeMillis();
 		long availableSequence;
@@ -746,70 +699,65 @@ public:
 }; // ClaimStrategy
 
 /**
- * ConsumerBarrier handed out for gating consumers of the RingBuffer and
- * dependent {@link Consumer}(s)
+ * {@link SequenceBarrier} handed out for gating {@link EventProcessor}s on a
+ * cursor sequence and optional dependent {@link EventProcessor}(s)
  */
-template<typename T>
-class ConsumerTrackingConsumerBarrier: public ConsumerBarrier<T> {
+template<typename event>
+class ProcessingSequenceBarrier: public SequenceBarrier<event> {
 private:
-	tbb::atomic<bool> _alerted;
-	RingBuffer<T>* _ring;
-  	std::vector<Consumer*>& _consumers;
+	WaitStrategy<event>* 	_waitStrategy;
+	Sequence*				_cursor;
+	Sequence				_dependents[];
+	tbb::atomic<bool> 		_alerted;
+
 public:
 
-	ConsumerTrackingConsumerBarrier(RingBuffer<T>* ring,
-			std::vector<Consumer*>& consumers)
-	: _consumers(consumers), _ring(ring) {
+	ProcessingSequenceBarrier(WaitStrategy<event>*  waitStrategy, Sequence* cursor,
+			Sequence dependents[])
+	: _waitStrategy(waitStrategy), _cursor(cursor), _dependents(dependents)
+	{
 		_alerted = false;
 	}
 
-	virtual T& getEntry(const long sequence) {
-//		std::cout << "CTCB.getEntry :" << sequence << std::endl;
-		return _ring->_entries[(int) sequence & _ring->_ringModMask];
+	virtual long waitFor(long sequence)	{
+		return	_waitStrategy->waitFor(_dependents, _cursor, this, sequence);
 	}
 
-	virtual long waitFor(const long sequence)
-	//    throws AlertException, InterruptedException
+	virtual long waitFor(long sequence,
+			const boost::posix_time::time_duration timeout)
 	{
-		return	_ring->_waitStrategy->waitFor
-				(_consumers, _ring, this, sequence);
+		return _waitStrategy->waitFor
+				(_dependents, _cursor, this, sequence, timeout);
 	}
 
-	virtual long waitFor(const long sequence, const boost::posix_time::time_duration timeout)
-	//  throws AlertException, InterruptedException
-	{
-		return _ring->_waitStrategy->waitFor
-				(_consumers, _ring, this, sequence, timeout);
-	}
-
-	virtual long getCursor() { return _ring->_cursor; }
+	virtual long getCursor() { return _cursor->get(); }
 
 	virtual bool isAlerted() {return _alerted;}
 
 	virtual void alert() {
-		_alerted = true; //TODO!!
-		_ring->_waitStrategy->signalAll();
+		_alerted = true;
+		_waitStrategy->signalAll();
 	}
 
 	virtual void clearAlert() {_alerted = false;}
-}; // ConsumerTrackingConsumerBarrier
+}; // ProcessingSequenceBarrier
 
 /**
  * {@link ProducerBarrier} that tracks multiple {@link Consumer}s when trying
  *  to claim
  * an {@link AbstractEntry} in the {@link RingBuffer}.
  */
-template <typename T>
-class ConsumerTrackingProducerBarrier : public ProducerBarrier<T> {
+template <typename event>
+class ConsumerTrackingProducerBarrier : public ProducerBarrier<event> {
 private :
-	std::vector<Consumer*>& _consumers;
+	std::vector<EventProcessor*>& _consumers;
 	long _lastConsumerMinimum;
-	RingBuffer<T>* _ring;
+	RingBuffer<event>* _ring;
 
 public:
 
-	ConsumerTrackingProducerBarrier(RingBuffer<T>* ring,
-			std::vector<Consumer*>& consumers )
+	ConsumerTrackingProducerBarrier(RingBuffer<event>* ring,
+			std::vector<EventProcessor*>& consumers )
 	: _consumers(consumers), _lastConsumerMinimum(INITIAL_CURSOR_VALUE),
 	  _ring(ring) {
 
@@ -821,18 +769,18 @@ public:
 		}
 	}
 
-	T& nextEntry() {
+	event& nextEntry() {
 		const long sequence = _ring->_claimStrategy->incrementAndGet();
 		ensureConsumersAreInRange(sequence);
 
-		T& entry = _ring->entries()[(int)sequence & _ring->ringModMask()];
-		entry.setSequence(sequence);
+		event& entry = _ring->entries()[(int)sequence & _ring->ringModMask()];
+	//	entry.setSequence(sequence); TODO
 //		std::cout << "CTPB: nextEntry: " << sequence << std::endl;
 		return entry;
 	}
 
-	virtual void commit(T& entry)	{
-		commit(entry.getSequence(), 1);
+	virtual void commit(event& entry)	{
+		//commit(entry.getSequence(), 1);TODO
 	}
 
 	SequenceBatch* nextEntries(SequenceBatch* sequenceBatch) {
@@ -843,8 +791,8 @@ public:
 
 		for (long i = sequenceBatch->getStart(), _end = sequenceBatch->getEnd(); i <= _end; i++)
 		{
-			T entry = _ring->_entries[(int)i & _ring->ringModMask()];
-			entry.setSequence(i);
+			event entry = _ring->_entries[(int)i & _ring->ringModMask()];
+			//entry.setSequence(i); // TODO
 		}
 
 		return sequenceBatch;
@@ -855,7 +803,7 @@ public:
 		commit(sequenceBatch->getEnd(), sequenceBatch->getSize());
 	}
 
-	T& getEntry(const long sequence)	{
+	event& getEntry(const long sequence)	{
 		return _ring->_entries[(int) sequence & _ring->ringModMask()];
 	}
 
@@ -903,13 +851,13 @@ class ForceFillConsumerTrackingProducerBarrier
 	: public ForceFillProducerBarrier<T>
 {
 private:
-		const std::vector<Consumer*>& _consumers;
+		const std::vector<EventProcessor*>& _consumers;
 		long _lastConsumerMinimum;
 		const RingBuffer<T>& _ring;
 
 public:
 		ForceFillConsumerTrackingProducerBarrier
-			(const std::vector<Consumer*>& consumers, const RingBuffer<T>& ring)
+			(const std::vector<EventProcessor*>& consumers, const RingBuffer<T>& ring)
 		: _consumers(consumers), _lastConsumerMinimum(INITIAL_CURSOR_VALUE),
 		  _ring(ring) {
 		if (0 == _consumers.size())
@@ -964,7 +912,7 @@ private:
 	ClaimStrategy* 			_claimStrategy;
 	WaitStrategy<T>* 			_waitStrategy;
 
-	friend class ConsumerTrackingConsumerBarrier<T>;
+	friend class ProcessingSequenceBarrier<T>;
 	friend class ConsumerTrackingProducerBarrier<T>;
 
 public:
@@ -1019,9 +967,9 @@ public:
 	 * @param consumersToTrack this barrier will track
 	 * @return the barrier gated as required
 	 */
-	ConsumerBarrier<T>*
-	createConsumerBarrier(std::vector<Consumer*>& consumersToTrack)  {
-		return new ConsumerTrackingConsumerBarrier<T>(this, consumersToTrack);
+	SequenceBarrier<T>*
+	createConsumerBarrier(std::vector<EventProcessor*>& consumersToTrack)  {
+		return new ProcessingSequenceBarrier<T>(this, consumersToTrack);
 	}
 
 	/**
@@ -1032,14 +980,14 @@ public:
 	 * @return a {@link ProducerBarrier} with the above configuration.
 	 */
 	 ProducerBarrier<T>* createProducerBarrier
-	 	 (std::vector<Consumer*>& consumersToTrack ) const
+	 	 (std::vector<EventProcessor*>& consumersToTrack ) const
 	 {
 		return new ConsumerTrackingProducerBarrier<T>(const_cast<RingBuffer<T>* >(this), consumersToTrack);
 	 }
 	 ProducerBarrier<T>* createProducerBarrier
-	 	 (Consumer* consumer ) const
+	 	 (EventProcessor* consumer ) const
 	 {
-		std::vector<Consumer*>* vec = new std::vector<Consumer*> ();
+		std::vector<EventProcessor*>* vec = new std::vector<EventProcessor*> ();
 		vec->push_back(consumer);
 		return new ConsumerTrackingProducerBarrier<T>(const_cast<RingBuffer<T>* >(this), *vec);
 	 }
@@ -1052,7 +1000,7 @@ public:
 	 * @param consumersToTrack to be tracked to prevent wrapping.
 	 * @return a {@link ForceFillProducerBarrier} with the above configuration.
 	 */
-	ForceFillProducerBarrier<T> createForceFillProducerBarrier(const std::vector<Consumer>& consumersToTrack)
+	ForceFillProducerBarrier<T> createForceFillProducerBarrier(const std::vector<EventProcessor>& consumersToTrack)
 	{
 		return new ForceFillConsumerTrackingProducerBarrier<T>(consumersToTrack);
 	}
@@ -1152,7 +1100,7 @@ public:
  * This is useful in tests or for pre-filling a {@link RingBuffer} from a producer.
  */
 template <class T>
-class NoOpConsumer : public Consumer {
+class NoOpConsumer : public EventProcessor {
 private:
 	const RingBuffer<T>& _ringBuffer;
 
@@ -1205,22 +1153,19 @@ public:
  *
  * @param <T> Entry implementation storing the data for sharing during exchange or parallel coordination of an event.
  */
-template <typename T>
-class BatchConsumer : public Consumer
+template <typename event>
+class BatchEventProcessor : public EventProcessor
 {
 private:
 
-	//friend class SequenceTrackerCallback<T>;
+	//friend class SequenceeventrackerCallback<event>;
 
-	ConsumerBarrier<T>* _consumerBarrier;
-    BatchHandler<T>* 	_handler;
-    ExceptionHandler* _exceptionHandler ;//= new FatalExceptionHandler();
+	SequenceBarrier<event>* _consumerBarrier;
+    BatchHandler<event>* 	_handler;
+    ExceptionHandler<event>* _exceptionHandler ;//= new FatalExceptionHandler();
 
-    long p1, p2, p3, p4, p5, p6, p7;  // cache line padding
     tbb::atomic<bool> _running;
-    long p8, p9, p10, p11, p12, p13, p14; // cache line padding
-    tbb::atomic<long> _sequence;// = RingBuffer.INITIAL_CURSOR_VALUE;
-	long p15, p16, p17, p18, p19, p20; // cache line padding
+    Sequence _sequence;// = RingBuffer.INITIAL_CURSOR_VALUE;
 
 public:
     /**
@@ -1230,12 +1175,12 @@ public:
      * @param consumerBarrier on which it is waiting.
      * @param handler is the delegate to which {@link AbstractEntry}s are dispatched.
      */
-    BatchConsumer(ConsumerBarrier<T>* consumerBarrier,
-                     BatchHandler<T>* handler)
+    BatchEventProcessor(SequenceBarrier<event>* consumerBarrier,
+                     BatchHandler<event>* handler)
     : _consumerBarrier(consumerBarrier), _handler(handler),
-      _exceptionHandler(new FatalExceptionHandler())
+      _exceptionHandler(new FatalExceptionHandler<event>()),
+      _sequence(INITIAL_CURSOR_VALUE)
     {
-    	_sequence = INITIAL_CURSOR_VALUE;
     	_running = true;
     }
 
@@ -1248,8 +1193,8 @@ public:
      * @param consumerBarrier on which it is waiting.
      * @param entryHandler is the delegate to which {@link AbstractEntry}s are dispatched.
      */
-//    public BatchConsumer(final ConsumerBarrier<T> consumerBarrier,
-//                         final SequenceTrackingHandler<T> entryHandler)
+//    public BatchConsumer(final ConsumerBarrier<event> consumerBarrier,
+//                         final SequenceTrackingHandler<event> entryHandler)
 //    {
 //        this.consumerBarrier = consumerBarrier;
 //        this.handler = entryHandler;
@@ -1257,7 +1202,7 @@ public:
 //        entryHandler.setSequenceTrackerCallback(new SequenceTrackerCallback());
 //    }
 
-	virtual long getSequence() const { return _sequence; }
+    Sequence& getSequence() { return _sequence;  }
 
 	virtual void halt()
     {
@@ -1271,7 +1216,7 @@ public:
      *
      * @param exceptionHandler to replace the existing exceptionHandler.
      */
-	void setExceptionHandler(const ExceptionHandler* exceptionHandler)
+	void setExceptionHandler(const ExceptionHandler<event>* exceptionHandler)
     {
         if (!exceptionHandler)
         {
@@ -1287,7 +1232,7 @@ public:
      *
       * @return the barrier this {@link Consumer} is using.
      */
-    ConsumerBarrier<T>& getConsumerBarrier() const
+    SequenceBarrier<event>& getConsumerBarrier() const
     	{ return _consumerBarrier; }
 
     /**
@@ -1303,8 +1248,8 @@ public:
 //            ((LifecycleAware)handler).onStart();
 //        }
 
-        T entry ;
-        long nextSequence = ++_sequence ;
+        event entry ;
+        long nextSequence = _sequence.get() + 1L;
         while (_running)
         {
 //            try
@@ -1316,21 +1261,21 @@ public:
                 for (; nextSequence <= availableSequence; nextSequence++)
                 {
                     entry = _consumerBarrier->getEntry(nextSequence);
-                    if (nextSequence % 1000 == 0) {
-						std::cout << "batchconsumer got "
-								<< entry.getSequence() << " for: "
-								<< nextSequence << std::endl;
-                    }
+//                    if (nextSequence % 1000 == 0) {
+//						std::cout << "batchconsumer got "
+//								<< entry.getSequence() << " for: "
+//								<< nextSequence << std::endl;
+//                    }
                     _handler->onAvailable(entry);
                 }
 //std::cout << "batchconsumer: still running... " << std::endl;
 
                 _handler->onEndOfBatch();
-                _sequence = entry.getSequence();
+                _sequence = nextSequence - 1L;//entry.getSequence();
 				if (_consumerBarrier->isAlerted()) {
 					//exceptionHandler.handle(ex, entry);
-					_sequence = entry.getSequence();
-					nextSequence = entry.getSequence() + 1;
+//					_sequence = entry.getSequence();  TODO
+//					nextSequence = entry.getSequence() + 1;
 std::cout << "batchconsumer: handling alert... " << std::endl;
 
 				}
@@ -1363,11 +1308,11 @@ template <typename T>
 class SequenceTrackerCallback
 {
 private:
-	BatchConsumer<T>& _batchConsumer;
+	BatchEventProcessor<T>& _batchConsumer;
 
 public:
 
-	SequenceTrackerCallback(BatchConsumer<T>& batchConsumer)
+	SequenceTrackerCallback(BatchEventProcessor<T>& batchConsumer)
 	: _batchConsumer(batchConsumer) {}
 
     /**

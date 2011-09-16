@@ -15,19 +15,19 @@
 
 namespace disruptor {
 
-class ValueEntry : public AbstractEntry {
+class ValueEvent {
 private:
 	long _value;
 
 public:
-	ValueEntry() : _value(0) {}
+	ValueEvent() : _value(0) {}
 
 	long getValue() const { return _value; }
 
     void setValue(const long value) { _value = value; }
 
-//    class Factory : public EntryFactory<ValueEntry> {
-//    	ValueEntry* create() { return new ValueEntry(); }
+//    class Factory : public EntryFactory<ValueEvent> {
+//    	ValueEvent* create() { return new ValueEvent(); }
 //    };
 };
 
@@ -69,7 +69,7 @@ public :
     virtual std::string testName() = 0;
 }; // AbstractPerfTestQueueVsDisruptor
 
-class ValueAdditionHandler : public BatchHandler<ValueEntry>
+class ValueAdditionHandler : public BatchHandler<ValueEvent>
 {
 private:
 	long _value;
@@ -79,7 +79,7 @@ public:
 
     void reset()  { _value = 0L; }
 
-    void onAvailable(const ValueEntry& entry) //throws Exception
+    void onAvailable(const ValueEvent& entry) //throws Exception
     {
         _value += entry.getValue();
     //	std::cout << "#" << entry.getValue() << " --> " << _value << std::endl;
@@ -194,23 +194,23 @@ protected:
 	const long 									_expectedResult;
     tbb::concurrent_bounded_queue<long>  		_blockingQ;
     ValueAdditionQueueConsumer* 				_qConsumer;
-    RingBuffer<ValueEntry> 						_ring;
-    ConsumerBarrier<ValueEntry>* 				_consumerBarrier;
+    RingBuffer<ValueEvent> 						_ring;
+    SequenceBarrier<ValueEvent>* 				_consumerBarrier;
 	ValueAdditionHandler* 						_handler;
-    BatchConsumer<ValueEntry>* 					_batchConsumer;
-    ProducerBarrier<ValueEntry>* 				_producerBarrier;
+    BatchEventProcessor<ValueEvent>* 					_batchConsumer;
+    ProducerBarrier<ValueEvent>* 				_producerBarrier;
 
 public :
 
-    UniCast1P1CPerfTest(std::vector<Consumer*>& consumers )
+    UniCast1P1CPerfTest(std::vector<EventProcessor*>& consumers )
     : _expectedResult(CalcExpectedResult()) ,
       _blockingQ( tbb::concurrent_bounded_queue<long>()),
       _qConsumer(new ValueAdditionQueueConsumer(_blockingQ)),
       _ring( SIZE,
-    		  new SingleThreadedStrategy(), new YieldingWait<ValueEntry>()),
+    		  new SingleThreadedStrategy(), new YieldingWait<ValueEvent>()),
       _consumerBarrier(_ring.createConsumerBarrier(consumers)),
       _handler(new ValueAdditionHandler()),
-      _batchConsumer( new BatchConsumer<ValueEntry>(_consumerBarrier, _handler)),
+      _batchConsumer( new BatchEventProcessor<ValueEvent>(_consumerBarrier, _handler)),
       _producerBarrier(_ring.createProducerBarrier(_batchConsumer))
 
     {
@@ -264,7 +264,7 @@ public :
     virtual long runDisruptorPass(int passNumber)// throws InterruptedException
     {
         _handler->reset();
-        boost::thread task(boost::bind(&BatchConsumer<ValueEntry>::run,
+        boost::thread task(boost::bind(&BatchEventProcessor<ValueEvent>::run,
         		boost::ref(*_batchConsumer)));
         boost::posix_time::ptime start =
         		boost::posix_time::microsec_clock::universal_time();
@@ -273,14 +273,14 @@ public :
 
         for (long i = 0; i < ITERATIONS; i++)
         {
-            ValueEntry& entry = _producerBarrier->nextEntry();
+            ValueEvent& entry = _producerBarrier->nextEntry();
             entry.setValue(i);
  //           std::cout << "producer put " << i << std::endl;
             _producerBarrier->commit(entry);
         }
 
         const long expectedSequence = _ring.getCursor();
-        while (_batchConsumer->getSequence() < expectedSequence)
+        while (_batchConsumer->getSequence().get() < expectedSequence)
         {
             boost::thread::yield();
         }
@@ -357,7 +357,7 @@ class UniCast1P1CBatchPerfTest : public UniCast1P1CPerfTest //AbstractPerfTestQu
 {
 public:
 
-    UniCast1P1CBatchPerfTest(std::vector<Consumer*>& consumers )
+    UniCast1P1CBatchPerfTest(std::vector<EventProcessor*>& consumers )
     : UniCast1P1CPerfTest(consumers)
     {
     }
@@ -365,7 +365,7 @@ public:
     virtual long runDisruptorPass(int passNumber) //throws InterruptedException
     {
         _handler->reset();
-        boost::thread task(boost::bind(&BatchConsumer<ValueEntry>::run,
+        boost::thread task(boost::bind(&BatchEventProcessor<ValueEvent>::run,
         		boost::ref(*_batchConsumer)));
 
         const int batchSize = 10;
@@ -380,7 +380,7 @@ public:
             _producerBarrier->nextEntries(&sequenceBatch);
             for (long c = sequenceBatch.getStart(), end = sequenceBatch.getEnd(); c <= end; c++)
             {
-                ValueEntry& entry = _producerBarrier->getEntry(c);
+                ValueEvent& entry = _producerBarrier->getEntry(c);
                 entry.setValue(offset++);
 std::cout << "producer: set " << entry.getValue() << " on " << c << std::endl;
             }
@@ -388,7 +388,7 @@ std::cout << "producer: set " << entry.getValue() << " on " << c << std::endl;
         }
 
         const long expectedSequence = _ring.getCursor();
-        while (_batchConsumer->getSequence() < expectedSequence)
+        while (_batchConsumer->getSequence().get() < expectedSequence)
         {
             // busy spin
             //boost::thread::yield();

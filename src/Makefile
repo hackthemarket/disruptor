@@ -47,7 +47,7 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
-am_perftests_OBJECTS = perf_tests.$(OBJEXT)
+am_perftests_OBJECTS = perf_tests.$(OBJEXT) disruptor.$(OBJEXT)
 perftests_OBJECTS = $(am_perftests_OBJECTS)
 perftests_LDADD = $(LDADD)
 DEFAULT_INCLUDES = -I.
@@ -159,7 +159,7 @@ target_vendor = unknown
 top_build_prefix = ../
 top_builddir = ..
 top_srcdir = ..
-perftests_SOURCES = perf_tests.cpp
+perftests_SOURCES = perf_tests.cpp disruptor.cpp
 INCLUDES = -I /home/tingarg/dev/tbb/include
 #AM_LIBRARIES = -L /home/tingarg/dev/tbb30_20110427oss/build/linux_intel64_gcc_cc4.4.3_libc2.11.1_kernel2.6.32_release
 AM_CXXFLAGS = -lboost_thread  -ltbb -O3
@@ -245,6 +245,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+include ./$(DEPDIR)/disruptor.Po
 include ./$(DEPDIR)/perf_tests.Po
 
 .cpp.o:
