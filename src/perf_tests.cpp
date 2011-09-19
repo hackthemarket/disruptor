@@ -8,17 +8,21 @@
 #include "perf_tests.hpp"
 
 using namespace disruptor;
+using namespace std;
 
 int
 main(int argc, char* argv[] ) {
-	boost::interprocess::message_queue::remove("UniCast1P1CPerfTest_Q");
+	try {
+		std::vector<Sequence*> consumers;
+		UniCast1P1CPerfTest test(consumers);
+		test.shouldCompareDisruptorVsQueues();
 
-	std::vector<EventProcessor*> consumers;
-	UniCast1P1CPerfTest test(consumers);
-	test.shouldCompareDisruptorVsQueues();
-
-//	UniCast1P1CBatchPerfTest test1(consumers);
-//	test1.shouldCompareDisruptorVsQueues();
-
+	//	UniCast1P1CBatchPerfTest test1(consumers);
+	//	test1.shouldCompareDisruptorVsQueues();
+	} catch( std::exception& e) {
+		cout << e.what() << endl;
+	} catch ( ... ) {
+		cout << "boom" << endl;
+	}
 	return EXIT_SUCCESS;
 }

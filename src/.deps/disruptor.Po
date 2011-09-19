@@ -440,6 +440,10 @@ disruptor.o: disruptor.cpp disruptor.hpp \
  /usr/local/include/boost/thread/condition_variable.hpp \
  /usr/local/include/boost/thread/pthread/condition_variable.hpp \
  /usr/local/include/boost/thread/pthread/thread_data.hpp \
+ event_processor.hpp wait_strats.hpp /usr/include/c++/4.4/vector \
+ /usr/include/c++/4.4/bits/stl_vector.h \
+ /usr/include/c++/4.4/bits/stl_bvector.h \
+ /usr/include/c++/4.4/bits/vector.tcc \
  /usr/local/include/boost/date_time/posix_time/posix_time.hpp \
  /usr/local/include/boost/date_time/posix_time/time_formatters.hpp \
  /usr/local/include/boost/date_time/gregorian/gregorian.hpp \
@@ -459,9 +463,6 @@ disruptor.o: disruptor.cpp disruptor.hpp \
  /usr/local/include/boost/io/ios_state.hpp \
  /usr/local/include/boost/io_fwd.hpp \
  /usr/local/include/boost/date_time/date_facet.hpp \
- /usr/include/c++/4.4/vector /usr/include/c++/4.4/bits/stl_vector.h \
- /usr/include/c++/4.4/bits/stl_bvector.h \
- /usr/include/c++/4.4/bits/vector.tcc \
  /usr/local/include/boost/algorithm/string/replace.hpp \
  /usr/local/include/boost/algorithm/string/config.hpp \
  /usr/local/include/boost/range/iterator_range.hpp \
@@ -635,7 +636,8 @@ disruptor.o: disruptor.cpp disruptor.hpp \
  /usr/local/include/boost/date_time/posix_time/posix_time_io.hpp \
  /usr/local/include/boost/date_time/time_facet.hpp \
  /usr/local/include/boost/algorithm/string/erase.hpp \
- /usr/local/include/boost/date_time/posix_time/time_parsers.hpp
+ /usr/local/include/boost/date_time/posix_time/time_parsers.hpp \
+ sequence.hpp
 
 disruptor.hpp:
 
@@ -1647,6 +1649,18 @@ disruptor.hpp:
 
 /usr/local/include/boost/thread/pthread/thread_data.hpp:
 
+event_processor.hpp:
+
+wait_strats.hpp:
+
+/usr/include/c++/4.4/vector:
+
+/usr/include/c++/4.4/bits/stl_vector.h:
+
+/usr/include/c++/4.4/bits/stl_bvector.h:
+
+/usr/include/c++/4.4/bits/vector.tcc:
+
 /usr/local/include/boost/date_time/posix_time/posix_time.hpp:
 
 /usr/local/include/boost/date_time/posix_time/time_formatters.hpp:
@@ -1686,14 +1700,6 @@ disruptor.hpp:
 /usr/local/include/boost/io_fwd.hpp:
 
 /usr/local/include/boost/date_time/date_facet.hpp:
-
-/usr/include/c++/4.4/vector:
-
-/usr/include/c++/4.4/bits/stl_vector.h:
-
-/usr/include/c++/4.4/bits/stl_bvector.h:
-
-/usr/include/c++/4.4/bits/vector.tcc:
 
 /usr/local/include/boost/algorithm/string/replace.hpp:
 
@@ -2046,3 +2052,5 @@ disruptor.hpp:
 /usr/local/include/boost/algorithm/string/erase.hpp:
 
 /usr/local/include/boost/date_time/posix_time/time_parsers.hpp:
+
+sequence.hpp:

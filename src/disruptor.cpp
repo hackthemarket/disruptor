@@ -33,7 +33,7 @@ const static AlertException::AlertException Alert;
  *     is equal to zero.
  * @since 1.5
  */
-int numberOfLeadingZeros(int i); {
+int numberOfLeadingZeros(int i) {
     // HD, Figure 5-6
     if (i == 0) return 32;
     int n = 1;
@@ -44,5 +44,22 @@ int numberOfLeadingZeros(int i); {
     n -= i >> 31;
     return n;
 }
+
+/**
+ * Get the minimum sequence from an array of {@link Consumer}s.
+ *
+ * @param consumers to compare.
+ * @return the minimum sequence found or Long.MAX_VALUE if the array is empty.
+ */
+long getMinimumSequence(std::vector<Sequence*>& consumers) {
+    long minimum = LONG_MAX;
+    for (std::vector<Sequence*>::const_iterator it = consumers.begin();
+    			it!=consumers.end(); ++it) {
+    	Sequence* seq = *it;
+    	minimum = std::min(minimum, seq->get());
+    }
+    return minimum;
+}
+
 
 }; // namespace dsiruptor
