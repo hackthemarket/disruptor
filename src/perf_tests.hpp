@@ -51,11 +51,11 @@ public :
     			<< disruptorOps << std::endl;
     }
 
-    virtual long runQueuePass(int passNumber) = 0; //throws Exception;
+    virtual long runQueuePass(int passNumber) = 0;
 
-    virtual long runDisruptorPass(int passNumber) = 0; //throws Exception;
+    virtual long runDisruptorPass(int passNumber) = 0;
 
-    virtual void shouldCompareDisruptorVsQueues() = 0; // throws Exception;
+    virtual void shouldCompareDisruptorVsQueues() = 0;
 
     virtual std::string testName() = 0;
 }; // AbstractPerfTestQueueVsDisruptor
@@ -74,16 +74,11 @@ public:
 
     void reset()  { _value = 0L; }
 
-    void onAvailable(const ValueEvent& entry) //throws Exception
-    {
-        _value += entry.getValue();
-    //	std::cout << "#" << entry.getValue() << " --> " << _value << std::endl;
-    }
+    void onAvailable(const ValueEvent& entry)
+    	{ _value += entry.getValue(); }
 
-    void onEndOfBatch() //throws Exception
-    {
-    //	std::cout << "VAH: onEndOfBatch()" << std::endl;
-    }
+    void onEndOfBatch() {}
+
 };  // ValueAdditionHandler
 
 class ValueAdditionQueueConsumer : public boost::noncopyable  //implements Runnable
@@ -171,8 +166,7 @@ public:
  */
 class UniCast1P1CPerfTest : public AbstractPerfTestQueueVsDisruptor {
 protected:
-    static const long CalcExpectedResult()
-    {
+    static const long CalcExpectedResult()   {
         long temp = 0L;
         for (long i = 0L; i < ITERATIONS; i++)
         {
@@ -183,7 +177,7 @@ protected:
     }
 
 	static const long SIZE = 1024 * 32;
-	static const long ITERATIONS = 1000L * 1000L * 20L ;
+	static const long ITERATIONS = 1000L * 1000L * 300L ;
 
 	const long 									_expectedResult;
     tbb::concurrent_bounded_queue<long>  		_blockingQ;
@@ -202,25 +196,20 @@ public :
       _ring( SIZE ),
       _consumerBarrier(_ring.newBarrier(consumers)),
       _handler(new ValueAdditionHandler()),
-      _batchConsumer( new BatchEventProcessor<ValueEvent>(&_ring, _consumerBarrier, _handler))
-//      _producerBarrier(_ring.createProducerBarrier(_batchConsumer))
+      _batchConsumer( new BatchEventProcessor<ValueEvent>
+    						(&_ring, _consumerBarrier, _handler))
 
     {
-    	//consumers.push_back(_batchConsumer);
+    	_ring.setGatingSequence(_batchConsumer->getSequence());
     	_blockingQ.set_capacity(SIZE);
     	std::cout << "set q size to " << SIZE << std::endl;
     }
 
     ~UniCast1P1CPerfTest() {    }
 
-    void shouldCompareDisruptorVsQueues()
-       // throws Exception
-    {
-        testImplementations();
-    }
+    void shouldCompareDisruptorVsQueues()  { testImplementations(); }
 
-    virtual long runQueuePass(const int passNumber) //throws InterruptedException
-    {
+    virtual long runQueuePass(const int passNumber) {
         _qConsumer->reset();
         boost::posix_time::ptime start =
         		boost::posix_time::microsec_clock::universal_time();
@@ -228,10 +217,7 @@ public :
         boost::thread task(boost::ref(*_qConsumer));
 
         for (long i = 0; i < ITERATIONS; i++)
-        {
-        	_blockingQ.push(i);
-        }
-       // std::cout << "producer: done writing "  << std::endl;
+        	{ _blockingQ.push(i); }
 
         const long expectedSequence = ITERATIONS - 1L;
 
@@ -243,9 +229,6 @@ public :
         boost::posix_time::time_duration dur = per.length();
         long opsPerSecond = (ITERATIONS * 1000L) / dur.total_milliseconds();
 
-//		std::cout << "op/s: " << opsPerSecond << std::endl;
-//		std::cout << "expected: " << CalcExpectedResult() << " value: "
-//				<< _handler->getValue() << std::endl;
         assert(CalcExpectedResult() == _qConsumer->getValue());
 
         return opsPerSecond;
@@ -258,153 +241,37 @@ public :
         		boost::ref(*_batchConsumer)));
         boost::posix_time::ptime start =
         		boost::posix_time::microsec_clock::universal_time();
-
-//        std::cout << "launched disruptor's consumer... " << std::endl;
-
-        for (long i = 0; i < ITERATIONS; i++)
-        {
+        // publish all 'events'
+        //
+        for (long i = 0; i < ITERATIONS; i++) {
         	long sequence = _ring.next();
             ValueEvent& entry = _ring.get(sequence);
             entry.setValue(i);
- //           std::cout << "producer put " << i << std::endl;
             _ring.publish(sequence);
         }
 
         const long expectedSequence = _ring.getCursor();
-        while (_batchConsumer->getSequence().get() < expectedSequence)
-        {
+        // wait 'til they're 'processed'
+        //
+        while (_batchConsumer->getSequence().get() < expectedSequence) {
             boost::thread::yield();
         }
         _batchConsumer->halt();
         task.interrupt();
         task.join();
- //       std::cout << "joined BatchConsumer... done " << std::endl;
         boost::posix_time::time_period per(start,
         		boost::posix_time::microsec_clock::universal_time());
         boost::posix_time::time_duration dur = per.length();
         long opsPerSecond = (ITERATIONS * 1000L) / dur.total_milliseconds();
 
-//        std::cout << "op/s: " << opsPerSecond << std::endl;
-//        std::cout << "expected: " << CalcExpectedResult() << "value: "
-//        		<< _handler->getValue() << std::endl;
         assert(CalcExpectedResult() == _handler->getValue());
 
         return opsPerSecond;
     }
 
-    virtual std::string testName() {
-    	return "UniCast1P1CPerfTest";
-    }
+    virtual std::string testName() { return "UniCast1P1CPerfTest"; }
 
 }; // UniCast1P1CPerfTest
-//
-///**
-// * <pre>
-// * UniCast a series of items between 1 producer and 1 consumer.
-// * This test illustrates the benefits of writing batches of 10 entries
-// * for exchange at a time.
-// *
-// * +----+    +----+
-// * | P0 |--->| C0 |
-// * +----+    +----+
-// *
-// *
-// * Queue Based:
-// * ============
-// *
-// *        put      take
-// * +----+    +====+    +----+
-// * | P0 |--->| Q0 |<---| C0 |
-// * +----+    +====+    +----+
-// *
-// * P0 - Producer 0
-// * Q0 - Queue 0
-// * C0 - Consumer 0
-// *
-// *
-// * Disruptor:
-// * ==========
-// *                   track to prevent wrap
-// *             +-----------------------------+
-// *             |                             |
-// *             |                             v
-// * +----+    +====+    +====+    +====+    +----+
-// * | P0 |--->| PB |--->| RB |<---| CB |    | C0 |
-// * +----+    +====+    +====+    +====+    +----+
-// *                claim      get    ^        |
-// *                                  |        |
-// *                                  +--------+
-// *                                    waitFor
-// *
-// * P0 - Producer 0
-// * PB - ProducerBarrier
-// * RB - RingBuffer
-// * CB - ConsumerBarrier
-// * C0 - Consumer 0
-// *
-// * </pre>
-// */
-//class UniCast1P1CBatchPerfTest : public UniCast1P1CPerfTest //AbstractPerfTestQueueVsDisruptor
-//{
-//public:
-//
-//    UniCast1P1CBatchPerfTest(std::vector<EventProcessor*>& consumers )
-//    : UniCast1P1CPerfTest(consumers)
-//    {
-//    }
-//
-//    virtual long runDisruptorPass(int passNumber) //throws InterruptedException
-//    {
-//        _handler->reset();
-//        boost::thread task(boost::bind(&BatchEventProcessor<ValueEvent>::run,
-//        		boost::ref(*_batchConsumer)));
-//
-//        const int batchSize = 10;
-//        SequenceBatch sequenceBatch(batchSize);
-//
-//        boost::posix_time::ptime start =
-//        		boost::posix_time::microsec_clock::universal_time();
-//
-//        long offset = 0;
-//        for (long i = 0; i < ITERATIONS; i += batchSize)
-//        {
-//            _producerBarrier->nextEntries(&sequenceBatch);
-//            for (long c = sequenceBatch.getStart(), end = sequenceBatch.getEnd(); c <= end; c++)
-//            {
-//                ValueEvent& entry = _producerBarrier->getEntry(c);
-//                entry.setValue(offset++);
-//std::cout << "producer: set " << entry.getValue() << " on " << c << std::endl;
-//            }
-//            _producerBarrier->commit(&sequenceBatch);
-//        }
-//
-//        const long expectedSequence = _ring.getCursor();
-//        while (_batchConsumer->getSequence().get() < expectedSequence)
-//        {
-//            // busy spin
-//            //boost::thread::yield();
-//        }
-//
-//        _batchConsumer->halt();
-//        task.interrupt();
-//        task.join();
-// //       std::cout << "joined BatchConsumer... done " << std::endl;
-//        boost::posix_time::time_period per(start,
-//        		boost::posix_time::microsec_clock::universal_time());
-//        boost::posix_time::time_duration dur = per.length();
-//        long opsPerSecond = (ITERATIONS * 1000L) / dur.total_milliseconds();
-//
-////        std::cout << "op/s: " << opsPerSecond << std::endl;
-////        std::cout << "expected: " << CalcExpectedResult() << "value: "
-////        		<< _handler->getValue() << std::endl;
-//        assert(CalcExpectedResult() == _handler->getValue());
-//
-//
-//        return opsPerSecond;
-//    }
-//}; // UniCast1P1CBatchPerfTest
-//
-
 
 
 };  // namespace disruptor
