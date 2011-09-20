@@ -93,7 +93,7 @@ public:
 	 */
 	RingBuffer(int size = DEF_BUF_SZ ,
 			ClaimStrategy* claimStrategy = new SingleThreadedStrategy(),
-			WaitStrategy<event>* waitStrategy = new WaitStrategy<event>())
+			WaitStrategy<event>* waitStrategy = new Yield<event>())
 		: Sequencer<event>(size, claimStrategy, waitStrategy),
 		  _mask(size-1), _entries(size)
 	{ }

@@ -22,34 +22,19 @@ private:
 public:
 	ValueEvent() : _value(0) {}
 
-	long getValue() const { return _value; }
+	long get() const { return _value; }
 
-    void setValue(const long value) { _value = value; }
+    void set(const long value) { _value = value; }
 };
 
 class AbstractPerfTestQueueVsDisruptor {
 
 public :
 
-    void testImplementations()  {
-        const int RUNS = 3;
-        long disruptorOps = 0L;
-        long queueOps = 0L;
-
-        for (int i = 0; i < RUNS; i++)  {
-            disruptorOps = runDisruptorPass(i);
-            queueOps = runQueuePass(i);
-            printResults(disruptorOps, queueOps, i);
-        }
-    }
+    void testImplementations()  ;
 
     void printResults
-    	(const long disruptorOps, const long queueOps, const int i) {
-
-    	std::cout << testName() << " OpsPerSecond run #" << i
-    			<< " : BlockingQueue=" << queueOps << ", Disruptor="
-    			<< disruptorOps << std::endl;
-    }
+    	(const long disruptorOps, const long queueOps, const int i) ;
 
     virtual long runQueuePass(int passNumber) = 0;
 
@@ -67,27 +52,26 @@ private:
 
 public:
     virtual void onEvent(ValueEvent& ev, long sequence, bool endOfBatch)  {
-        _value += ev.getValue();
+        _value += ev.get();
     }
 
 	long getValue()  { return _value; }
 
     void reset()  { _value = 0L; }
 
-    void onAvailable(const ValueEvent& entry)
-    	{ _value += entry.getValue(); }
+    void onAvailable(const ValueEvent& entry){  _value += entry.get(); }
 
     void onEndOfBatch() {}
 
 };  // ValueAdditionHandler
 
-class ValueAdditionQueueConsumer : public boost::noncopyable  //implements Runnable
+class ValueAdditionQueueConsumer : public boost::noncopyable
 {
 private :
-	tbb::atomic<bool> _running;
-    tbb::atomic<long> _sequence;
-    long 		_value;
-    tbb::concurrent_bounded_queue<long>& _blockingQ;
+	tbb::atomic<bool> 						_running;
+    tbb::atomic<long> 						_sequence;
+    long 									_value;
+    tbb::concurrent_bounded_queue<long>& 	_blockingQ;
 
 public:
 
@@ -209,70 +193,13 @@ public :
 
     void shouldCompareDisruptorVsQueues()  { testImplementations(); }
 
-    virtual long runQueuePass(const int passNumber) {
-        _qConsumer->reset();
-        boost::posix_time::ptime start =
-        		boost::posix_time::microsec_clock::universal_time();
+    virtual long runQueuePass(int passNumber) ;
 
-        boost::thread task(boost::ref(*_qConsumer));
-
-        for (long i = 0; i < ITERATIONS; i++)
-        	{ _blockingQ.push(i); }
-
-        const long expectedSequence = ITERATIONS - 1L;
-
-        _qConsumer->halt();
-        task.join();
-
-        boost::posix_time::time_period per(start,
-        		boost::posix_time::microsec_clock::universal_time());
-        boost::posix_time::time_duration dur = per.length();
-        long opsPerSecond = (ITERATIONS * 1000L) / dur.total_milliseconds();
-
-        assert(CalcExpectedResult() == _qConsumer->getValue());
-
-        return opsPerSecond;
-    }
-
-    virtual long runDisruptorPass(int passNumber)// throws InterruptedException
-    {
-        _handler->reset();
-        boost::thread task(boost::bind(&BatchEventProcessor<ValueEvent>::run,
-        		boost::ref(*_batchConsumer)));
-        boost::posix_time::ptime start =
-        		boost::posix_time::microsec_clock::universal_time();
-        // publish all 'events'
-        //
-        for (long i = 0; i < ITERATIONS; i++) {
-        	long sequence = _ring.next();
-            ValueEvent& entry = _ring.get(sequence);
-            entry.setValue(i);
-            _ring.publish(sequence);
-        }
-
-        const long expectedSequence = _ring.getCursor();
-        // wait 'til they're 'processed'
-        //
-        while (_batchConsumer->getSequence().get() < expectedSequence) {
-            boost::thread::yield();
-        }
-        _batchConsumer->halt();
-        task.interrupt();
-        task.join();
-        boost::posix_time::time_period per(start,
-        		boost::posix_time::microsec_clock::universal_time());
-        boost::posix_time::time_duration dur = per.length();
-        long opsPerSecond = (ITERATIONS * 1000L) / dur.total_milliseconds();
-
-        assert(CalcExpectedResult() == _handler->getValue());
-
-        return opsPerSecond;
-    }
+    virtual long runDisruptorPass(int passNumber) ;
 
     virtual std::string testName() { return "UniCast1P1CPerfTest"; }
 
 }; // UniCast1P1CPerfTest
-
 
 };  // namespace disruptor
 #endif /* PERF_TESTS_HPP_ */

@@ -334,7 +334,7 @@ public:
     /** Construct a Sequencer with the selected strategies. */
     Sequencer
     	(int buffer_sz, ClaimStrategy* claim_strat,
-  			WaitStrategy<event>* wait_strat)
+  			WaitStrategy<event>* wait_strat )
     	: _buffer_sz(buffer_sz), _claim_strat(claim_strat),
     	  _wait_strat(wait_strat)
     { }
