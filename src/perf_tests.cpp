@@ -7,7 +7,11 @@
 
 #include "perf_tests.hpp"
 
+//using disruptor::Sequence;
+//using disruptor::UniCast1P1CPerfTest;
 using namespace disruptor;
+//using disruptor
+
 using namespace std;
 
 int
@@ -44,9 +48,13 @@ void AbstractPerfTestQueueVsDisruptor::testImplementations() {
 void AbstractPerfTestQueueVsDisruptor::printResults
 	(const long disruptorOps, const long queueOps, const int i) {
 
-	std::cout << testName() << " OpsPerSecond run #" << i
-			<< " : BlockingQueue=" << queueOps << ", Disruptor="
-			<< disruptorOps << std::endl;
+//	std::cout << testName() << " OpsPerSecond run #" << i
+//			<< " : BlockingQueue=" << queueOps << ", Disruptor="
+//			<< disruptorOps << std::endl;
+    setlocale(LC_NUMERIC, "");
+	printf("%s OpsPerSecond run #%d: BlockingQueue=%'d, Disruptor=%'d\n",
+			testName().c_str(), i, queueOps, disruptorOps);
+
 };
 
 long UniCast1P1CPerfTest::runQueuePass(int passNumber) {

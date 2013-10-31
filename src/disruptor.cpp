@@ -9,7 +9,7 @@
 
 namespace disruptor {
 
-const static AlertException::AlertException Alert;
+//const static AlertException::AlertException Alert;
 
 /**
  *             ---- Hacked straight out of Java library. -----

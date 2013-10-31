@@ -36,6 +36,8 @@ public:
      * Called when a publisher has published an event to the {@link RingBuffer}
      */
     virtual void onEvent(event& ev, long sequence, bool endOfBatch) = 0;
+
+    virtual ~EventHandler() {}
 };// EventHandler
 
 /**
@@ -59,6 +61,9 @@ public:
      */
 	virtual void handle(const void * ex, long sequence, event e) = 0;
 
+
+	virtual ~ExceptionHandler() {}
+
 };
 
 /**
@@ -77,6 +82,9 @@ public:
     	std::cerr << "Exception processing "
     			<< sequence << std::endl;
     }
+
+    virtual ~FatalExceptionHandler() {}
+
 };
 
 template <typename event>
@@ -140,6 +148,8 @@ public:
     	_running = true;
     }
 
+    virtual ~BatchEventProcessor() {}
+
    Sequence& getSequence() { return _sequence;  }
 
 	void halt() {
@@ -191,7 +201,7 @@ public:
                 }
 
                 _sequence.set(next - 1L);
-            } catch (AlertException ex) {
+            } catch (AlertException& ex) {
                if (!_running) { break; }
             }
             catch (const std::exception& ex)

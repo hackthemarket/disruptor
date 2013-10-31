@@ -96,47 +96,47 @@ public :
  * @param <T> {@link AbstractEntry} implementation stored in
  * the {@link RingBuffer}
  */
-template < typename T >
-class SequenceBarrier {
-public:
-
-    /** Wait for the given sequence to be available for consumption. */
-    virtual long waitFor(long sequence) = 0;
-
-    /**
-     * Wait for the given sequence to be available for consumption
-     * with a time out.
-     */
-    virtual long waitFor
-    	(long sequence, boost::posix_time::time_duration timeout) = 0;
-
-    /** Delegate a call to the {@link RingBuffer#getCursor()}  */
-    virtual long getCursor() = 0;
-
-    /**
-     * The current alert status for the barrier.
-     *
-     * @return true if in alert otherwise false.
-     */
-    virtual bool isAlerted() = 0;
-
-    /**
-     * Alert the consumers of a status change and stay in this status
-     *  until cleared.
-     */
-    virtual void alert() = 0;
-
-    /** Clear the current alert status. */
-    virtual void clearAlert() = 0;
-
-}; // SequenceBarrier
+//template < typename T >
+//class SequenceBarrier {
+//public:
+//
+//    /** Wait for the given sequence to be available for consumption. */
+//    virtual long waitFor(long sequence) = 0;
+//
+//    /**
+//     * Wait for the given sequence to be available for consumption
+//     * with a time out.
+//     */
+//    virtual long waitFor
+//    	(long sequence, boost::posix_time::time_duration timeout) = 0;
+//
+//    /** Delegate a call to the {@link RingBuffer#getCursor()}  */
+//    virtual long getCursor() = 0;
+//
+//    /**
+//     * The current alert status for the barrier.
+//     *
+//     * @return true if in alert otherwise false.
+//     */
+//    virtual bool isAlerted() = 0;
+//
+//    /**
+//     * Alert the consumers of a status change and stay in this status
+//     *  until cleared.
+//     */
+//    virtual void alert() = 0;
+//
+//    /** Clear the current alert status. */
+//    virtual void clearAlert() = 0;
+//
+//}; // SequenceBarrier
 
 /**
  * {@link SequenceBarrier} handed out for gating {@link EventProcessor}s on a
  * cursor sequence and optional dependent {@link EventProcessor}(s)
  */
 template<typename event>
-class ProcessingSequenceBarrier: public SequenceBarrier<event> {
+class SequenceBarrier {
 private:
 	WaitStrategy<event>* 		_waitStrategy;
 	Sequence*					_cursor;
@@ -145,7 +145,7 @@ private:
 
 public:
 
-	ProcessingSequenceBarrier(WaitStrategy<event>*  waitStrategy,
+	SequenceBarrier(WaitStrategy<event>*  waitStrategy,
 			Sequence* cursor, std::vector<Sequence*>& dependents)
 	: _waitStrategy(waitStrategy), _cursor(cursor), _dependents(dependents)
 	{
@@ -353,8 +353,7 @@ public:
      * list of {@link Sequence}s
      */
 	SequenceBarrier<event>* newBarrier(std::vector<Sequence*>&  sequences) {
-        return new ProcessingSequenceBarrier<event>
-        		(_wait_strat, &_cursor, sequences);
+        return new SequenceBarrier<event>(_wait_strat, &_cursor, sequences);
     }
 
     /** The capacity of the data structure to hold entries.*/

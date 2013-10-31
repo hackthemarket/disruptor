@@ -31,6 +31,8 @@ class AbstractPerfTestQueueVsDisruptor {
 
 public :
 
+	virtual ~AbstractPerfTestQueueVsDisruptor () {}
+
     void testImplementations()  ;
 
     void printResults
@@ -54,6 +56,8 @@ public:
     virtual void onEvent(ValueEvent& ev, long sequence, bool endOfBatch)  {
         _value += ev.get();
     }
+
+    virtual ~ValueAdditionHandler() {}
 
 	long getValue()  { return _value; }
 
@@ -189,7 +193,7 @@ public :
     	std::cout << "set q size to " << SIZE << std::endl;
     }
 
-    ~UniCast1P1CPerfTest() {    }
+//    ~UniCast1P1CPerfTest() {    }
 
     void shouldCompareDisruptorVsQueues()  { testImplementations(); }
 
