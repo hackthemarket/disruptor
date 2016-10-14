@@ -1,4 +1,4 @@
-Readme file for disruptor project by Tito Ingargiola
+Readme file for disruptor project
 
 This is a partial (1P1C only) implementation of the Disruptor pattern
 (https://lmax-exchange.github.io/disruptor/) in C++.
@@ -22,6 +22,8 @@ UniCast1P1CPerfTest OpsPerSecond run #1: BlockingQueue=5,811,700, Disruptor=49,5
 UniCast1P1CPerfTest OpsPerSecond run #2: BlockingQueue=5,838,052, Disruptor=49,244,911
 [tito@geobukseon src]$
 
-This suggests the disruptor is running about 10X faster than boost's
+This suggests the disruptor is running about 9X faster than boost's
 blocking queue.
 
+--
+Tito Ingargiola
