@@ -1,2 +1,2 @@
 SUBDIRS=src
-aclocal_AMFLAGS = -I /home/tingarg/dev/tbb/include
+aclocal_AMFLAGS = -I /home/tito/dev/tbb/include

@@ -1,1 +1,27 @@
-Sample readme file for disruptor project.
+Readme file for disruptor project by Tito Ingargiola
+
+This is a partial (1P1C only) implementation of the Disruptor pattern
+(https://lmax-exchange.github.io/disruptor/) in C++.
+
+Not meant for any particular purpose beyond satisfying my curiosity.
+You may use it to do likewise.
+
+To build:
+
+1. Edit src/Makefile.am as needed to identify TBB & boost locations.
+2. ./configure
+3. ./make
+4. src/perftests
+
+When I do that on my vintage 2009 i7 920, I see:
+
+[tito@geobukseon src]$ ./perftests 
+set q size to 32768
+UniCast1P1CPerfTest OpsPerSecond run #0: BlockingQueue=5,819,931, Disruptor=49,188,391
+UniCast1P1CPerfTest OpsPerSecond run #1: BlockingQueue=5,811,700, Disruptor=49,513,120
+UniCast1P1CPerfTest OpsPerSecond run #2: BlockingQueue=5,838,052, Disruptor=49,244,911
+[tito@geobukseon src]$
+
+This suggests the disruptor is running about 10X faster than boost's
+blocking queue.
+
